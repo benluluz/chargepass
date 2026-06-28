@@ -181,8 +181,9 @@ app.http('delayDeparture', {
       const id = req.params.id
       const user = cosmos.getUserFromRequest(req)
       const body = await req.json()
+      const delayMinutes = Number(body.delayMinutes ?? body.addMinutes)
 
-      if (!body.delayMinutes || typeof body.delayMinutes !== 'number') {
+      if (!Number.isFinite(delayMinutes) || delayMinutes <= 0) {
         return { status: 400, jsonBody: { error: 'delayMinutes (number) is required' } }
       }
 
@@ -200,12 +201,12 @@ app.http('delayDeparture', {
       }
 
       // Update ETA
-      const newEta = dep.etaMinutes + body.delayMinutes
+      const newEta = dep.etaMinutes + delayMinutes
       const newPings = [
         ...(dep.pings || []),
         {
           isEtaUpdate: true,
-          delayMinutes: body.delayMinutes,
+          delayMinutes,
           newEta: newEta,
           updatedAt: new Date().toISOString()
         }
