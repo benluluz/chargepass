@@ -168,4 +168,58 @@ app.http('cancelDeparture', {
       return { status: 500, jsonBody: { error: e.message } }
     }
   }
+}
+// POST /api/departures/{id}/ extend ETA by specified minutes (max 2 updates)delay 
+app.http('delayDeparture', {
+  methods: ['POST'],
+  authLevel: 'anonymous',
+  route: 'departures/{id}/delay',
+  handler: async (req, ctx) => {
+    try {
+      await cosmos.ensureInitialized()
+      const id = req.params.id
+      const user = cosmos.getUserFromRequest(req)
+      const body = await req.json()
+
+      if (!body.delayMinutes || typeof body.delayMinutes !== 'number') {
+        return { status: 400, jsonBody: { error: 'delayMinutes (number) is required' } }
+      }
+
+      const { resource: dep } = await cosmos.departuresContainer.item(id, id).read()
+      if (!dep) return { status: 404, jsonBody: { error: 'Departure not found' } }
+      if (dep.userId !== user.userId) return { status: 403, jsonBody: { error: 'Only the departure owner can delay' } }
+      if (dep.status !== 'available' && dep.status !== 'claimed') {
+        return { status: 400, jsonBody: { error: 'Departure is not active' } }
+      }
+
+      // Track number of updates via pings array (reuse for ETA tracking)
+      const updates = dep.pings?.filter(p => p.isEtaUpdate) || []
+      if (updates.length >= 2) {
+        return { status: 400, jsonBody: { error: 'Maximum ETA updates (2) reached' } }
+      }
+
+      // Update ETA
+      const newEta = dep.etaMinutes + body.delayMinutes
+      const newPings = [
+        ...(dep.pings || []),
+        {
+          isEtaUpdate: true,
+          delayMinutes: body.delayMinutes,
+          newEta: newEta,
+          updatedAt: new Date().toISOString()
+        }
+      ]
+
+      await cosmos.departuresContainer.item(id, id).replace({
+        ...dep,
+        etaMinutes: newEta,
+        pings: newPings
+      })
+
+      return { jsonBody: { success: true, newEta, updatesRemaining: 2 - (updates.length + 1) } }
+    } catch (e) {
+      ctx.error('delayDeparture error:', e)
+      return { status: 500, jsonBody: { error: e.message } }
+    }
+  }
 })

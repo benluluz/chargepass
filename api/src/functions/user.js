@@ -231,4 +231,51 @@ app.http('getLeaderboard', {
       return { status: 500, jsonBody: { error: e.message } }
     }
   }
+}
+// GET /api/me/ current active departures (notification feed)notifications 
+app.http('getMyNotifications', {
+  methods: ['GET'],
+  authLevel: 'anonymous',
+  route: 'me/notifications',
+  handler: async (req, ctx) => {
+    try {
+      await cosmos.ensureInitialized()
+      const user = cosmos.getUserFromRequest(req)
+      
+      // Get all active departures from other users (notifications feed)
+      const { resources } = await cosmos.departuresContainer.items.query({
+        query: 'SELECT * FROM c WHERE c.userId != @uid AND c.status IN ("available", "claimed") ORDER BY c._ts DESC',
+        parameters: [{ name: '@uid', value: user.userId }]
+      }).fetchAll()
+      
+      return { jsonBody: resources }
+    } catch (e) {
+      ctx.error('getMyNotifications error:', e)
+      return { status: 500, jsonBody: { error: e.message } }
+    }
+  }
+})
+
+// GET /api/me/notifications- past notifications (completed handoffs)history 
+app.http('getNotificationsHistory', {
+  methods: ['GET'],
+  authLevel: 'anonymous',
+  route: 'me/notifications-history',
+  handler: async (req, ctx) => {
+    try {
+      await cosmos.ensureInitialized()
+      const user = cosmos.getUserFromRequest(req)
+      
+      // Get completed handoffs from other users (notification history)
+      const { resources } = await cosmos.departuresContainer.items.query({
+        query: 'SELECT * FROM c WHERE c.userId != @uid AND c.status = "completed" ORDER BY c.completedAt DESC OFFSET 0 LIMIT 50',
+        parameters: [{ name: '@uid', value: user.userId }]
+      }).fetchAll()
+      
+      return { jsonBody: resources }
+    } catch (e) {
+      ctx.error('getNotificationsHistory error:', e)
+      return { status: 500, jsonBody: { error: e.message } }
+    }
+  }
 })
