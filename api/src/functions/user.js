@@ -280,3 +280,41 @@ app.http('getNotificationsHistory', {
     }
   }
 })
+
+// POST /api/me/notify-me — toggle notification preference
+app.http('toggleNotifyMe', {
+  methods: ['POST'],
+  authLevel: 'anonymous',
+  route: 'me/notify-me',
+  handler: async (req, ctx) => {
+    try {
+      await cosmos.ensureInitialized()
+      const user = cosmos.getUserFromRequest(req)
+      const body = await req.json()
+      const enabled = Boolean(body?.enabled)
+
+      if (!user.userEmail?.toLowerCase().endsWith('@microsoft.com')) {
+        return { status: 403, jsonBody: { error: 'Only @microsoft.com accounts can update notification preferences.' } }
+      }
+
+      const { resource: existing } = await cosmos.usersContainer.item(user.userId, user.userId).read().catch(() => ({ resource: null }))
+      await cosmos.usersContainer.items.upsert({
+        id: user.userId,
+        userId: user.userId,
+        userName: user.userName,
+        userEmail: user.userEmail,
+        phoneNumber: existing?.phoneNumber ?? null,
+        licensePlate: existing?.licensePlate ?? null,
+        credits: existing?.credits ?? 0,
+        totalHandoffs: existing?.totalHandoffs ?? 0,
+        notifyMe: enabled,
+        onboardingSeen: existing?.onboardingSeen ?? false
+      })
+
+      return { jsonBody: { success: true, notifyMe: enabled } }
+    } catch (e) {
+      ctx.error('toggleNotifyMe error:', e)
+      return { status: 500, jsonBody: { error: e.message } }
+    }
+  }
+})
