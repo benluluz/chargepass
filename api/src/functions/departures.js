@@ -105,6 +105,8 @@ app.http('postDeparture', {
         licensePlate: existingUser?.licensePlate ?? null,
         notifyMe: existingUser?.notifyMe ?? false,
         onboardingSeen: existingUser?.onboardingSeen ?? false,
+        browserPushEnabled: existingUser?.browserPushEnabled ?? false,
+        pushSubscriptions: existingUser?.pushSubscriptions ?? [],
         credits: existingUser?.credits ?? 0,
         totalHandoffs: existingUser?.totalHandoffs ?? 0
       })

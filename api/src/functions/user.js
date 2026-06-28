@@ -2,6 +2,14 @@
 const { app } = require('@azure/functions')
 const cosmos = require('../lib/cosmos')
 
+function buildInviteLink(req, userId) {
+  if (!userId) return null
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host')
+  const proto = req.headers.get('x-forwarded-proto') || 'https'
+  if (!host) return null
+  return `${proto}://${host}/?invite=${encodeURIComponent(userId)}`
+}
+
 // GET /api/health — lightweight probe for SWA/API/Cosmos diagnostics
 app.http('health', {
   methods: ['GET'],
@@ -30,6 +38,7 @@ app.http('registerMe', {
       const body = await req.json()
       const phone = (body.phoneNumber || '').replace(/\D/g, '')
       const licensePlate = body.licensePlate ? String(body.licensePlate).toUpperCase() : null
+      const inviteCode = String(body.inviteCode || '').trim()
 
       if (!user.userEmail?.toLowerCase().endsWith('@microsoft.com')) {
         return { status: 403, jsonBody: { error: 'Only @microsoft.com accounts can register.' } }
@@ -49,8 +58,32 @@ app.http('registerMe', {
         credits: existing?.credits ?? 0,
         totalHandoffs: existing?.totalHandoffs ?? 0,
         notifyMe: existing?.notifyMe ?? false,
-        onboardingSeen: existing?.onboardingSeen ?? false
+        onboardingSeen: existing?.onboardingSeen ?? false,
+        browserPushEnabled: existing?.browserPushEnabled ?? false,
+        pushSubscriptions: existing?.pushSubscriptions ?? []
       })
+
+      if (inviteCode && inviteCode !== user.userId) {
+        const { resource: inviter } = await cosmos.usersContainer.item(inviteCode, inviteCode).read().catch(() => ({ resource: null }))
+        if (inviter) {
+          await cosmos.usersContainer.items.upsert({
+            id: inviter.userId,
+            userId: inviter.userId,
+            userName: inviter.userName,
+            userEmail: inviter.userEmail,
+            phoneNumber: inviter.phoneNumber ?? null,
+            licensePlate: inviter.licensePlate ?? null,
+            credits: (inviter.credits ?? 0) + 3,
+            totalHandoffs: inviter.totalHandoffs ?? 0,
+            notifyMe: inviter.notifyMe ?? false,
+            onboardingSeen: inviter.onboardingSeen ?? false,
+            browserPushEnabled: inviter.browserPushEnabled ?? false,
+            pushSubscriptions: inviter.pushSubscriptions ?? []
+          })
+        } else {
+          ctx.warn('registerMe inviteCode not found:', inviteCode)
+        }
+      }
       return { jsonBody: { success: true } }
     } catch (e) {
       ctx.error('registerMe error:', e)
@@ -90,7 +123,9 @@ app.http('updateMyProfile', {
         credits: existing?.credits ?? 0,
         totalHandoffs: existing?.totalHandoffs ?? 0,
         notifyMe: existing?.notifyMe ?? false,
-        onboardingSeen: existing?.onboardingSeen ?? false
+        onboardingSeen: existing?.onboardingSeen ?? false,
+        browserPushEnabled: existing?.browserPushEnabled ?? false,
+        pushSubscriptions: existing?.pushSubscriptions ?? []
       })
 
       return { jsonBody: { success: true } }
@@ -127,6 +162,8 @@ app.http('getMe', {
           totalHandoffs: resource?.totalHandoffs ?? 0,
           notifyMe: resource?.notifyMe ?? false,
           onboardingSeen: resource?.onboardingSeen ?? false,
+          browserPushEnabled: resource?.browserPushEnabled ?? false,
+          inviteLink: buildInviteLink(req, user.userId),
           hasActiveClaim
         }
       }
@@ -157,7 +194,9 @@ app.http('markOnboardingSeen', {
         credits: existing?.credits ?? 0,
         totalHandoffs: existing?.totalHandoffs ?? 0,
         notifyMe: existing?.notifyMe ?? false,
-        onboardingSeen: true
+        onboardingSeen: true,
+        browserPushEnabled: existing?.browserPushEnabled ?? false,
+        pushSubscriptions: existing?.pushSubscriptions ?? []
       })
       return { jsonBody: { success: true } }
     } catch (e) {
@@ -308,7 +347,9 @@ app.http('toggleNotifyMe', {
         credits: existing?.credits ?? 0,
         totalHandoffs: existing?.totalHandoffs ?? 0,
         notifyMe: enabled,
-        onboardingSeen: existing?.onboardingSeen ?? false
+        onboardingSeen: existing?.onboardingSeen ?? false,
+        browserPushEnabled: existing?.browserPushEnabled ?? false,
+        pushSubscriptions: existing?.pushSubscriptions ?? []
       })
 
       return { jsonBody: { success: true, notifyMe: enabled } }

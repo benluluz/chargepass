@@ -10,6 +10,7 @@ export default function Profile() {
   const [error, setError] = useState('')
   const [copyStatus, setCopyStatus] = useState('')
   const [pushStatus, setPushStatus] = useState('')
+  const inviteLink = profile?.inviteLink || (profile?.userId && typeof window !== 'undefined' ? `${window.location.origin}/?invite=${encodeURIComponent(profile.userId)}` : '')
 
   useEffect(() => {
     get('/api/me').then(data => {
@@ -44,9 +45,9 @@ export default function Profile() {
   }
 
   async function handleCopyInvite() {
-    if (!profile?.inviteLink) return
+    if (!inviteLink) return
     try {
-      await navigator.clipboard.writeText(profile.inviteLink)
+      await navigator.clipboard.writeText(inviteLink)
       setCopyStatus('Invite link copied.')
     } catch {
       setCopyStatus('Could not copy automatically. Please copy it manually.')
@@ -157,7 +158,7 @@ export default function Profile() {
           You get +3 credits when a friend registers using your invite link.
         </p>
         <div className="form-group" style={{ marginBottom: 10 }}>
-          <input className="form-input" value={profile.inviteLink || ''} readOnly />
+          <input className="form-input" value={inviteLink} readOnly />
         </div>
         <button type="button" className="btn btn-secondary" onClick={handleCopyInvite}>
           Copy invite link

@@ -129,8 +129,14 @@ app.http('confirmHandoff', {
             userId: dep.userId,
             userName: dep.userName,
             userEmail: dep.userEmail,
+            phoneNumber: null,
+            licensePlate: null,
             credits: HANDOFF_CREDITS,
-            totalHandoffs: 1
+            totalHandoffs: 1,
+            notifyMe: false,
+            onboardingSeen: false,
+            browserPushEnabled: false,
+            pushSubscriptions: []
           })
         }
       } catch (creditErr) {
