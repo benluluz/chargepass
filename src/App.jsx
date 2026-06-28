@@ -47,6 +47,7 @@ export default function App() {
   const [fadingNotificationIds, setFadingNotificationIds] = useState([])
   const hideTimersRef = useRef(new Map())
   const removeTimersRef = useRef(new Map())
+  const seenNotificationsRef = useRef(new Set())
   const lastSpotsSeenAtRef = useRef(Date.now())
 
   const loadProfile = useCallback(async () => {
@@ -113,6 +114,22 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    try {
+      const raw = localStorage.getItem('chargepass_seen_notifications')
+      const ids = raw ? JSON.parse(raw) : []
+      seenNotificationsRef.current = new Set(Array.isArray(ids) ? ids : [])
+    } catch {
+      seenNotificationsRef.current = new Set()
+    }
+  }, [])
+
+  function markNotificationsSeen(ids) {
+    if (!ids.length) return
+    ids.forEach(id => seenNotificationsRef.current.add(id))
+    localStorage.setItem('chargepass_seen_notifications', JSON.stringify([...seenNotificationsRef.current]))
+  }
+
+  useEffect(() => {
     if (!user) return
     const loadNotifications = async () => {
       try {
@@ -120,17 +137,14 @@ export default function App() {
         if (!res.ok) return
         const rows = await res.json()
         if (!Array.isArray(rows) || !rows.length) return
-        if (location.pathname !== '/my-activity') setActivityBadge(true)
-        const notifications = rows.map(row => ({
+        const notifications = rows.filter(row => !seenNotificationsRef.current.has(row.id)).map(row => ({
           id: row.id,
-          title: row.status === 'claimed'
-            ? `Spot ${row.spotNumber} is claimed`
-            : `New spot posted: ${row.spotNumber}`,
-          message: row.status === 'claimed'
-            ? `${row.claimedBy?.userName || 'Someone'} is on the way`
-            : `${row.userName} is leaving in ~${row.etaMinutes} min`,
-          url: '/?view=my-activity'
+          title: row.title,
+          message: row.message,
+          url: row.url || '/?view=my-activity'
         }))
+        if (notifications.length && location.pathname !== '/my-activity') setActivityBadge(true)
+        markNotificationsSeen(notifications.map(n => n.id))
         setInAppNotifications(prev => {
           const existing = new Set(prev.map(n => n.id))
           return [...notifications.filter(n => !existing.has(n.id)), ...prev].slice(0, 5)

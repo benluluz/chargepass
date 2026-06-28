@@ -225,10 +225,9 @@ app.http('getMyActivity', {
       await cosmos.ensureInitialized()
       const user = cosmos.getUserFromRequest(req)
 
-      const [ 
+      const [
         { resource: userRecord },
         { resources: activeDeps },
-        { resources: allActiveDeps },
         { resources: claimedDeps },
         { resources: completed }
       ] = await Promise.all([
@@ -242,23 +241,17 @@ app.http('getMyActivity', {
           parameters: [{ name: '@uid', value: user.userId }]
         }).fetchAll(),
         cosmos.departuresContainer.items.query({
-          query: 'SELECT * FROM c WHERE c.status IN ("available", "claimed") ORDER BY c._ts DESC'
-        }).fetchAll(),
-        cosmos.departuresContainer.items.query({
           query: 'SELECT * FROM c WHERE c.userId = @uid AND c.status = "completed" ORDER BY c.completedAt DESC',
           parameters: [{ name: '@uid', value: user.userId }]
         }).fetchAll()
       ])
-
-      const pendingPingDeparture = allActiveDeps.find(dep => dep.claimedBy?.userId === user.userId || dep.pings?.some(p => p.userId === user.userId && !p.isEtaUpdate)) || null
-      const claimedSpot = claimedDeps[0] ?? pendingPingDeparture
 
       return {
         jsonBody: {
           credits: userRecord?.credits ?? 0,
           totalHandoffs: userRecord?.totalHandoffs ?? 0,
           activeDeparture: activeDeps[0] ?? null,
-          claimedSpot,
+          claimedSpot: claimedDeps[0] ?? null,
           completedHandoffs: completed
         }
       }
@@ -297,14 +290,39 @@ app.http('getMyNotifications', {
     try {
       await cosmos.ensureInitialized()
       const user = cosmos.getUserFromRequest(req)
-      
-      // Get all active departures from other users (notifications feed)
-      const { resources } = await cosmos.departuresContainer.items.query({
-        query: 'SELECT * FROM c WHERE c.userId != @uid AND c.status IN ("available", "claimed") ORDER BY c._ts DESC',
-        parameters: [{ name: '@uid', value: user.userId }]
-      }).fetchAll()
-      
-      return { jsonBody: resources }
+      const [available, claimedMine] = await Promise.all([
+        cosmos.departuresContainer.items.query({
+          query: 'SELECT * FROM c WHERE c.status = "available" AND c.userId != @uid ORDER BY c._ts DESC',
+          parameters: [{ name: '@uid', value: user.userId }]
+        }).fetchAll(),
+        cosmos.departuresContainer.items.query({
+          query: 'SELECT * FROM c WHERE c.status = "claimed" AND c.userId = @uid ORDER BY c._ts DESC',
+          parameters: [{ name: '@uid', value: user.userId }]
+        }).fetchAll()
+      ])
+
+      return {
+        jsonBody: [
+          ...available.resources.map(dep => ({
+            id: `available-${dep.id}`,
+            kind: 'available',
+            title: `New spot posted: ${dep.spotNumber}`,
+            message: `${dep.userName} is leaving in ~${dep.etaMinutes} min`,
+            url: '/?view=my-activity',
+            timestamp: dep.postedAt,
+            spotNumber: dep.spotNumber
+          })),
+          ...claimedMine.resources.map(dep => ({
+            id: `claimed-${dep.id}`,
+            kind: 'claimed',
+            title: `Spot ${dep.spotNumber} is claimed`,
+            message: `${dep.claimedBy?.userName || 'Someone'} is on the way`,
+            url: '/?view=my-activity',
+            timestamp: dep.claimedAt || dep.postedAt,
+            spotNumber: dep.spotNumber
+          }))
+        ]
+      }
     } catch (e) {
       ctx.error('getMyNotifications error:', e)
       return { status: 500, jsonBody: { error: e.message } }
