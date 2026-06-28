@@ -197,6 +197,12 @@ chargepass/
 
 ---
 
+## CI/CD Pipeline
+
+**Automated deployment**: Every push to `main` triggers a GitHub Actions workflow that automatically builds and deploys to Azure Static Web Apps. Changes are live within minutes! 🚀
+
+---
+
 ## Microsoft Hackathon 2026
 
 This project was created for the **Microsoft Global Hackathon 2026**.
