@@ -64,7 +64,13 @@ export default function SpotCard({ departure, currentUser, canClaim, onClaim, on
       })
       if (res.ok) {
         const data = await res.json()
-        setClaimed(data)
+        setClaimed({
+          posterName: data.posterName || departure.userName,
+          posterEmail: data.posterEmail || departure.userEmail,
+          posterPhone: data.posterPhone || '',
+          spotNumber: data.spotNumber || departure.spotNumber,
+          pingCount: data.pingCount || 1
+        })
         setClaimedFading(false)
         onClaim && onClaim()
       } else {
@@ -106,9 +112,9 @@ export default function SpotCard({ departure, currentUser, canClaim, onClaim, on
         <div style={{ textAlign: 'center', padding: '8px 0' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: 8 }}>&#10003;</div>
           <div className="spot-number" style={{ margin: '0 auto 10px', display: 'inline-block', color: floorColor }}>{claimed.spotNumber}</div>
-          <p style={{ fontWeight: 700, marginBottom: 4 }}>Spot claimed!</p>
+          <p style={{ fontWeight: 700, marginBottom: 4 }}>Ping sent!</p>
           <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', marginBottom: 16 }}>
-            Contact <strong>{claimed.posterName}</strong> on WhatsApp to coordinate the handoff.
+            The poster will accept it from My Activity. Contact <strong>{claimed.posterName}</strong> to coordinate the handoff.
           </p>
           <a href={waLink} target="_blank" rel="noopener noreferrer"
             className="btn btn-full"

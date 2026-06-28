@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Header from './components/Header'
 import Home from './pages/Home'
@@ -35,6 +35,7 @@ function LoginScreen() {
 
 export default function App() {
   const location = useLocation()
+  const navigate = useNavigate()
   const [user, setUser]           = useState(undefined)
   const [profile, setProfile]     = useState(undefined)
   const [profileLoadError, setProfileLoadError] = useState('')
@@ -113,9 +114,19 @@ export default function App() {
         const rows = await res.json()
         if (!Array.isArray(rows) || !rows.length) return
         if (location.pathname !== '/my-activity') setActivityBadge(true)
+        const notifications = rows.map(row => ({
+          id: row.id,
+          title: row.status === 'claimed'
+            ? `Spot ${row.spotNumber} is claimed`
+            : `New spot posted: ${row.spotNumber}`,
+          message: row.status === 'claimed'
+            ? `${row.claimedBy?.userName || 'Someone'} is on the way`
+            : `${row.userName} is leaving in ~${row.etaMinutes} min`,
+          url: '/'
+        }))
         setInAppNotifications(prev => {
           const existing = new Set(prev.map(n => n.id))
-          return [...rows.filter(n => !existing.has(n.id)), ...prev].slice(0, 5)
+          return [...notifications.filter(n => !existing.has(n.id)), ...prev].slice(0, 5)
         })
       } catch {}
     }
@@ -260,11 +271,11 @@ export default function App() {
             <div
               key={n.id}
               className={'top-notification' + (fadingNotificationIds.includes(n.id) ? ' fade-out' : '')}
-              onClick={() => { window.location.href = '/my-activity' }}
+              onClick={() => { navigate(n.url || '/') }}
               role="button"
               tabIndex={0}
               onKeyDown={e => {
-                if (e.key === 'Enter' || e.key === ' ') window.location.href = '/my-activity'
+                if (e.key === 'Enter' || e.key === ' ') navigate(n.url || '/')
               }}
             >
               <div>

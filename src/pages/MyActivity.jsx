@@ -64,6 +64,14 @@ export default function MyActivity({ user, onViewed }) {
     if (res) loadActivity()
   }
 
+  async function handleAcceptPing(pingerId) {
+    if (!dep) return
+    setConfirming(true)
+    const res = await post('/api/departures/' + dep.id + '/accept-ping', { userId: pingerId })
+    setConfirming(false)
+    if (res) loadActivity()
+  }
+
   async function handleNoShow() {
     if (!window.confirm("Confirm you did not get this spot? The poster won't receive credit points.")) return
     setConfirming(true)
@@ -167,6 +175,7 @@ export default function MyActivity({ user, onViewed }) {
   const isPastDeadline = claimed && new Date(claimed.confirmedDeadline) < new Date()
   const claimedFloor = claimed ? getSpotFloor(claimed.spotNumber) : null
   const depFloor = dep ? getSpotFloor(dep.spotNumber) : null
+  const pendingPings = dep?.pings?.filter(p => !p.isEtaUpdate) || []
 
   return (
     <div>
@@ -293,6 +302,27 @@ export default function MyActivity({ user, onViewed }) {
                     ? 'Maximum ETA extensions reached for this post.'
                     : `ETA updates left: ${2 - (dep.delayExtensions || 0)} · Claimer gets notified without credit charge.`}
                 </div>
+                {pendingPings.length > 0 && (
+                  <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 10, marginTop: 10 }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-muted)', marginBottom: 8 }}>
+                      Pending claims
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {pendingPings.map(p => (
+                        <div key={p.userId} style={{ background: 'var(--color-surface-2)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                          <div style={{ fontWeight: 600, marginBottom: 4 }}>{p.userName}</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginBottom: 8 }}>
+                            {p.userEmail}
+                            {p.userPhone ? ` · ${p.userPhone}` : ''}
+                          </div>
+                          <button className="btn btn-primary btn-sm" onClick={() => handleAcceptPing(p.userId)} disabled={confirming}>
+                            Accept this claim
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {dep.claimedBy?.userPhone && (
                     <a
@@ -386,23 +416,37 @@ export default function MyActivity({ user, onViewed }) {
 
       <div style={{ marginTop: 24 }}>
         <div className="section-title">Notification History ({notificationHistory.length})</div>
-        {notificationHistory.length === 0 ? (
-          <div className="card" style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: 16 }}>
-            No notifications yet.
-          </div>
-        ) : (
-          <div className="spots-list">
-            {notificationHistory.map(n => (
-              <div key={n.id} className="card" style={{ padding: 12 }}>
-                <div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{n.title || 'Notification'}</div>
-                <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', marginTop: 4 }}>{n.message}</div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: 6 }}>
-                  {new Date(n.timestamp).toLocaleString('en-IL')}
+        {(() => {
+          const items = notificationHistory.map(n => ({
+            id: n.id,
+            title: n.status === 'completed'
+              ? `Spot ${n.spotNumber} completed`
+              : `Spot ${n.spotNumber} updated`,
+            message: n.status === 'completed'
+              ? `Claimed by ${n.claimedBy?.userName || 'Unknown'}`
+              : `${n.userName} posted a spot`,
+            timestamp: n.completedAt || n.postedAt
+          }))
+          return items.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: 16 }}>
+              No notifications yet.
+            </div>
+          ) : (
+            <div className="spots-list">
+              {items.map(n => (
+                <div key={n.id} className="card" style={{ padding: 12 }}>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{n.title}</div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', marginTop: 4 }}>{n.message}</div>
+                  {n.timestamp && (
+                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: 6 }}>
+                      {new Date(n.timestamp).toLocaleString('en-IL')}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )
+        })()}
       </div>
     </div>
   )

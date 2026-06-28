@@ -21,6 +21,7 @@ app.http('pingLeaver', {
       if (dep.userId === user.userId) return { status: 400, jsonBody: { error: "You can't ping your own departure" } }
       if (dep.status === 'completed' || dep.status === 'cancelled') return { status: 400, jsonBody: { error: 'Departure is no longer active' } }
       if (dep.pings?.some(p => p.userId === user.userId)) return { status: 400, jsonBody: { error: 'Already pinged' } }
+      const { resource: posterRecord } = await cosmos.usersContainer.item(dep.userId, dep.userId).read().catch(() => ({ resource: null }))
 
       const pings = [...(dep.pings || []), {
         userId: user.userId,
@@ -32,7 +33,16 @@ app.http('pingLeaver', {
       }]
 
       await cosmos.departuresContainer.item(id, id).replace({ ...dep, pings })
-      return { jsonBody: { success: true, pingCount: pings.length } }
+      return {
+        jsonBody: {
+          success: true,
+          pingCount: pings.length,
+          posterName: dep.userName,
+          posterEmail: dep.userEmail,
+          posterPhone: posterRecord?.phoneNumber ?? null,
+          spotNumber: dep.spotNumber
+        }
+      }
     } catch (e) {
       ctx.error('pingLeaver error:', e)
       return { status: 500, jsonBody: { error: e.message } }
