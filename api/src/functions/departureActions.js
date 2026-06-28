@@ -32,7 +32,19 @@ app.http('pingLeaver', {
         pinggedAt: new Date().toISOString()
       }]
 
-      await cosmos.departuresContainer.item(id, id).replace({ ...dep, pings })
+      await cosmos.departuresContainer.item(id, id).replace({
+        ...dep,
+        status: 'claimed',
+        claimedBy: {
+          userId: user.userId,
+          userName: user.userName,
+          userEmail: user.userEmail,
+          userPhone: userRecord?.phoneNumber ?? null,
+          userLicensePlate: userRecord?.licensePlate ?? null
+        },
+        claimedAt: new Date().toISOString(),
+        pings
+      })
       return {
         jsonBody: {
           success: true,

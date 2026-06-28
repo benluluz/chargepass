@@ -116,6 +116,7 @@ app.http('postDeparture', {
         userId: user.userId,
         userName: user.userName,
         userEmail: user.userEmail,
+        posterPhone: existingUser?.phoneNumber ?? null,
         spotNumber: normalizeSpotNumber(body.spotNumber),
         etaMinutes: Number(body.etaMinutes),
         status: 'available',

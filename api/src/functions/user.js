@@ -152,11 +152,15 @@ app.http('getMe', {
       await cosmos.ensureInitialized()
       const user = cosmos.getUserFromRequest(req)
       const { resource } = await cosmos.usersContainer.item(user.userId, user.userId).read().catch(() => ({ resource: null }))
+      const { resources: activeDeps } = await cosmos.departuresContainer.items.query({
+        query: 'SELECT * FROM c WHERE c.userId = @uid AND c.status IN ("available", "claimed")',
+        parameters: [{ name: '@uid', value: user.userId }]
+      }).fetchAll()
       const { resources: claimed } = await cosmos.departuresContainer.items.query({
         query: 'SELECT * FROM c WHERE c.status = "claimed" AND c.claimedBy.userId = @uid OFFSET 0 LIMIT 1',
         parameters: [{ name: '@uid', value: user.userId }]
       }).fetchAll()
-      const hasActiveClaim = claimed.length > 0
+      const hasActiveClaim = claimed.length > 0 || activeDeps.some(dep => dep.pings?.some(p => p.userId === user.userId))
       return {
         jsonBody: {
           userId: user.userId,
@@ -222,7 +226,7 @@ app.http('getMyActivity', {
       await cosmos.ensureInitialized()
       const user = cosmos.getUserFromRequest(req)
 
-      const [
+      const [ 
         { resource: userRecord },
         { resources: activeDeps },
         { resources: claimedDeps },
@@ -243,12 +247,15 @@ app.http('getMyActivity', {
         }).fetchAll()
       ])
 
+      const pendingPingDeparture = activeDeps.find(dep => dep.pings?.some(p => p.userId === user.userId && !p.isEtaUpdate)) || null
+      const claimedSpot = claimedDeps[0] ?? pendingPingDeparture
+
       return {
         jsonBody: {
           credits: userRecord?.credits ?? 0,
           totalHandoffs: userRecord?.totalHandoffs ?? 0,
           activeDeparture: activeDeps[0] ?? null,
-          claimedSpot: claimedDeps[0] ?? null,
+          claimedSpot,
           completedHandoffs: completed
         }
       }

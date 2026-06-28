@@ -52,6 +52,7 @@ export default function SpotCard({ departure, currentUser, canClaim, onClaim, on
 
   const myId  = currentUser?.userId
   const isOwn = departure.userId === myId
+  const claimedByMe = departure.status === 'claimed' && departure.claimedBy?.userId === myId
   const floor = getSpotFloor(departure.spotNumber)
   const floorColor = floor ? FLOOR_COLORS[floor] : 'var(--color-primary)'
 
@@ -131,6 +132,56 @@ export default function SpotCard({ departure, currentUser, canClaim, onClaim, on
           <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
             Go to <strong>My Activity</strong> to confirm when you arrive.
           </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (claimedByMe) {
+    return (
+      <div className="spot-card claimed-after-ping" style={{ borderColor: floorColor, borderWidth: 2, background: '#eff6ff' }}>
+        <div style={{ textAlign: 'center', padding: '8px 0' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: 8 }}>&#10003;</div>
+          <div className="spot-number" style={{ margin: '0 auto 10px', display: 'inline-block', color: floorColor }}>{departure.spotNumber}</div>
+          <p style={{ fontWeight: 700, marginBottom: 4 }}>Claimed by you</p>
+          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', marginBottom: 16 }}>
+            Open <strong>My Activity</strong> to chat with the poster and complete the handoff.
+          </p>
+          <a href="/my-activity" className="btn btn-full btn-primary">
+            Go to My Activity
+          </a>
+        </div>
+      </div>
+    )
+  }
+
+  if (isOwn && departure.status === 'claimed') {
+    return (
+      <div className="spot-card own" style={{ borderLeft: `6px solid ${floorColor}`, background: '#fefce8' }}>
+        <div className="spot-card-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div className="spot-number" style={{ color: floorColor }}>{departure.spotNumber}</div>
+            {floor && (
+              <span className="spot-badge" style={{ background: `${floorColor}20`, color: floorColor }}>{`Floor ${floor}`}</span>
+            )}
+          </div>
+          <span className="spot-badge badge-claimed">Claimed</span>
+        </div>
+        <div className="spot-user">
+          <div className="user-avatar" style={{ width: 38, height: 38, fontSize: '0.875rem', flexShrink: 0 }}>
+            {initials(departure.userName)}
+          </div>
+          <div>
+            <div className="spot-user-name">Your departure is claimed</div>
+            <div className="spot-eta">
+              <strong>{departure.claimedBy?.userName || 'Someone'}</strong> is on the way
+            </div>
+          </div>
+        </div>
+        <div className="spot-actions" style={{ marginTop: 12 }}>
+          <a href="/my-activity" className="btn btn-primary btn-sm">
+            Open My Activity
+          </a>
         </div>
       </div>
     )

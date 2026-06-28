@@ -84,6 +84,13 @@ export default function App() {
   }, [location.search])
 
   useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    if (params.get('view') === 'my-activity' && location.pathname !== '/my-activity') {
+      navigate('/my-activity', { replace: true })
+    }
+  }, [location.pathname, location.search, navigate])
+
+  useEffect(() => {
     fetch('/.auth/me')
       .then(r => r.json())
       .then(async data => {
@@ -122,7 +129,7 @@ export default function App() {
           message: row.status === 'claimed'
             ? `${row.claimedBy?.userName || 'Someone'} is on the way`
             : `${row.userName} is leaving in ~${row.etaMinutes} min`,
-          url: '/'
+          url: '/?view=my-activity'
         }))
         setInAppNotifications(prev => {
           const existing = new Set(prev.map(n => n.id))

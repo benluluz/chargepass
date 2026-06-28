@@ -175,7 +175,7 @@ export default function MyActivity({ user, onViewed }) {
   const isPastDeadline = claimed && new Date(claimed.confirmedDeadline) < new Date()
   const claimedFloor = claimed ? getSpotFloor(claimed.spotNumber) : null
   const depFloor = dep ? getSpotFloor(dep.spotNumber) : null
-  const pendingPings = dep?.pings?.filter(p => !p.isEtaUpdate) || []
+  const pendingClaim = claimed && (!claimed.claimedBy || claimed.status !== 'claimed')
 
   return (
     <div>
@@ -212,7 +212,16 @@ export default function MyActivity({ user, onViewed }) {
               <span style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>posted by {claimed.userName}</span>
             </div>
 
-            {isPastDeadline ? (
+            {pendingClaim ? (
+              <div style={{ background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 'var(--radius-sm)', padding: '10px 12px', marginBottom: 12 }}>
+                <p style={{ fontWeight: 700, color: '#1d4ed8', marginBottom: 4 }}>
+                  Claim sent — waiting for the poster to accept.
+                </p>
+                <p style={{ fontSize: '0.85rem', color: '#1e3a8a' }}>
+                  You can still chat now, and the poster will see your pending claim in My Activity.
+                </p>
+              </div>
+            ) : isPastDeadline ? (
               <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 'var(--radius-sm)', padding: '10px 12px', marginBottom: 12 }}>
                 <p style={{ fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>
                   20 minutes have passed since the departure time!
@@ -228,16 +237,16 @@ export default function MyActivity({ user, onViewed }) {
             )}
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-              <button className="btn btn-primary btn-sm" onClick={handleConfirm} disabled={confirming}>
-                {confirming ? '...' : 'Got the Spot!'}
-              </button>
-              <button className="btn btn-secondary btn-sm" onClick={handleNoShow} disabled={confirming}>
-                Did Not Get It
-              </button>
-              <button className="btn btn-danger btn-sm" onClick={handleReleaseClaim} disabled={confirming}>
-                Release Claim
-              </button>
-            </div>
+                <button className="btn btn-primary btn-sm" onClick={handleConfirm} disabled={confirming || pendingClaim}>
+                  {confirming ? '...' : 'Got the Spot!'}
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={handleNoShow} disabled={confirming || pendingClaim}>
+                  Did Not Get It
+                </button>
+                <button className="btn btn-danger btn-sm" onClick={handleReleaseClaim} disabled={confirming || pendingClaim}>
+                  Release Claim
+                </button>
+              </div>
 
             <a
               href={waLink(claimed.posterPhone, claimed.userName, claimed.spotNumber)}
@@ -302,27 +311,6 @@ export default function MyActivity({ user, onViewed }) {
                     ? 'Maximum ETA extensions reached for this post.'
                     : `ETA updates left: ${2 - (dep.delayExtensions || 0)} · Claimer gets notified without credit charge.`}
                 </div>
-                {pendingPings.length > 0 && (
-                  <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 10, marginTop: 10 }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-muted)', marginBottom: 8 }}>
-                      Pending claims
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {pendingPings.map(p => (
-                        <div key={p.userId} style={{ background: 'var(--color-surface-2)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                          <div style={{ fontWeight: 600, marginBottom: 4 }}>{p.userName}</div>
-                          <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginBottom: 8 }}>
-                            {p.userEmail}
-                            {p.userPhone ? ` · ${p.userPhone}` : ''}
-                          </div>
-                          <button className="btn btn-primary btn-sm" onClick={() => handleAcceptPing(p.userId)} disabled={confirming}>
-                            Accept this claim
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {dep.claimedBy?.userPhone && (
                     <a

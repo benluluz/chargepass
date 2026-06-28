@@ -1,12 +1,12 @@
 self.addEventListener('push', event => {
-  let payload = { title: 'ChargePass', body: 'You have a new notification.', url: '/my-activity', tag: 'chargepass' }
+  let payload = { title: 'ChargePass', body: 'You have a new notification.', url: '/?view=my-activity', tag: 'chargepass' }
   try {
     payload = { ...payload, ...(event.data ? event.data.json() : {}) }
   } catch {}
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
-      data: { url: payload.url || '/my-activity' },
+      data: { url: payload.url || '/?view=my-activity' },
       tag: payload.tag || 'chargepass'
     })
   )
@@ -14,7 +14,7 @@ self.addEventListener('push', event => {
 
 self.addEventListener('notificationclick', event => {
   event.notification.close()
-  const url = event.notification?.data?.url || '/my-activity'
+  const url = event.notification?.data?.url || '/?view=my-activity'
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
       for (const client of windowClients) {
@@ -27,4 +27,3 @@ self.addEventListener('notificationclick', event => {
     })
   )
 })
-
