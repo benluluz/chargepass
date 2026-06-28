@@ -4,6 +4,18 @@ const cosmos = require('../lib/cosmos')
 
 function buildInviteLink(req, userId) {
   if (!userId) return null
+  const originHeader = req.headers.get('origin')
+  if (originHeader) {
+    return `${originHeader.replace(/\/$/, '')}/?invite=${encodeURIComponent(userId)}`
+  }
+
+  const referer = req.headers.get('referer')
+  if (referer) {
+    try {
+      return `${new URL(referer).origin}/?invite=${encodeURIComponent(userId)}`
+    } catch {}
+  }
+
   const host = req.headers.get('x-forwarded-host') || req.headers.get('host')
   const proto = req.headers.get('x-forwarded-proto') || 'https'
   if (!host) return null
