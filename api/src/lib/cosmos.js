@@ -4,13 +4,20 @@ if (!globalThis.crypto) {
   globalThis.crypto = nodeCrypto.webcrypto
 }
 const { CosmosClient } = require('@azure/cosmos')
+const { ClientSecretCredential } = require('@azure/identity')
 
 const connectionString = process.env.COSMOS_CONNECTION_STRING || ''
+const accountEndpoint = process.env.COSMOS_ACCOUNT_ENDPOINT || ''
+const tenantId = process.env.COSMOS_TENANT_ID || ''
+const clientId = process.env.COSMOS_CLIENT_ID || ''
+const clientSecret = process.env.COSMOS_CLIENT_SECRET || ''
+const aadScope = process.env.COSMOS_AAD_SCOPE || 'https://cosmos.azure.com/.default'
 let client = null
 let db = null
 let departuresContainer = null
 let usersContainer = null
 let useMemoryStorage = false
+let authMode = 'memory'
 
 const memory = {
   departures: new Map(),
@@ -125,33 +132,50 @@ function createMemoryContainer(name) {
 
 async function ensureInitialized() {
   if (initialized) return
-  if (!connectionString) {
-    useMemoryStorage = true
-    departuresContainer = createMemoryContainer('departures')
-    usersContainer = createMemoryContainer('users')
-    initialized = true
-    return
-  }
-
   try {
-    client = new CosmosClient(connectionString)
-    db = client.database('chargepass')
-    departuresContainer = db.container('departures')
-    usersContainer = db.container('users')
+    const hasAadCredentials = accountEndpoint && tenantId && clientId && clientSecret
 
-    await client.databases.createIfNotExists({ id: 'chargepass' })
-    await db.containers.createIfNotExists({
-      id: 'departures',
-      partitionKey: { paths: ['/id'] }
-    })
-    await db.containers.createIfNotExists({
-      id: 'users',
-      partitionKey: { paths: ['/id'] }
-    })
+    if (hasAadCredentials) {
+      const aadCredentials = new ClientSecretCredential(tenantId, clientId, clientSecret)
+      client = new CosmosClient({
+        endpoint: accountEndpoint,
+        aadCredentials,
+        aadScope
+      })
+      authMode = 'aad-cosmos'
+      db = client.database('chargepass')
+      departuresContainer = db.container('departures')
+      usersContainer = db.container('users')
+    } else if (connectionString) {
+      client = new CosmosClient(connectionString)
+      authMode = 'key-cosmos'
+      db = client.database('chargepass')
+      departuresContainer = db.container('departures')
+      usersContainer = db.container('users')
+    } else {
+      useMemoryStorage = true
+      departuresContainer = createMemoryContainer('departures')
+      usersContainer = createMemoryContainer('users')
+      initialized = true
+      return
+    }
+
+    if (!hasAadCredentials) {
+      await client.databases.createIfNotExists({ id: 'chargepass' })
+      await db.containers.createIfNotExists({
+        id: 'departures',
+        partitionKey: { paths: ['/id'] }
+      })
+      await db.containers.createIfNotExists({
+        id: 'users',
+        partitionKey: { paths: ['/id'] }
+      })
+    }
   } catch (e) {
     useMemoryStorage = true
     departuresContainer = createMemoryContainer('departures')
     usersContainer = createMemoryContainer('users')
+    authMode = 'memory'
     console.warn('Cosmos unavailable, using in-memory storage for demo:', e.message)
   }
 
@@ -187,6 +211,6 @@ module.exports = {
   ensureInitialized,
   getUserFromRequest,
   get storageMode() {
-    return useMemoryStorage ? 'memory' : 'cosmos'
+    return useMemoryStorage ? 'memory' : authMode
   }
 }

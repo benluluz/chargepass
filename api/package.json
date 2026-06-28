@@ -8,7 +8,8 @@
     "watch": "echo No watch step required"
   },
   "dependencies": {
-    "@azure/cosmos": "^4.0.0",
+    "@azure/cosmos": "^4.9.3",
+    "@azure/identity": "^4.13.1",
     "@azure/functions": "^4.5.0",
     "twilio": "^6.0.2"
   }
