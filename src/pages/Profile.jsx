@@ -107,7 +107,7 @@ export default function Profile() {
 
       <form className="card" onSubmit={handleSave}>
         <div className="form-group">
-          <label className="form-label">Microsoft email</label>
+          <label className="form-label">Email</label>
           <input className="form-input" value={profile.userEmail || ''} readOnly style={{ background: 'var(--color-surface-2)' }} />
           <p className="form-hint">Used for Teams chat links and notifications.</p>
         </div>

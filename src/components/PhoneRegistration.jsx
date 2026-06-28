@@ -2,7 +2,6 @@ import { useState } from 'react'
 
 export default function PhoneRegistration({ user, inviteCode, onComplete }) {
   const email = user?.userDetails || ''
-  const isCorpEmail = email.toLowerCase().endsWith('@microsoft.com')
   const [phone, setPhone] = useState('')
   const [licensePlate, setLicensePlate] = useState('')
   const [loading, setLoading] = useState(false)
@@ -10,10 +9,6 @@ export default function PhoneRegistration({ user, inviteCode, onComplete }) {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!isCorpEmail) {
-      setError('Only @microsoft.com accounts can register for Teams notifications.')
-      return
-    }
     const digits = phone.replace(/[\s\-()+]/g, '').replace(/^00/, '')
     const normalized = digits.startsWith('972') ? digits : digits.startsWith('0') ? '972' + digits.slice(1) : digits
     if (normalized.length < 9) { setError('Please enter a valid phone number (at least 9 digits)'); return }
@@ -51,12 +46,12 @@ export default function PhoneRegistration({ user, inviteCode, onComplete }) {
         </div>
         <h1>One more step</h1>
         <p>
-          {'Confirm your details so colleagues can reach you on Teams or WhatsApp for handoff coordination.'}
+          {'Confirm your details so colleagues can reach you by email, Teams, or WhatsApp for handoff coordination.'}
         </p>
         <form onSubmit={handleSubmit} style={{ textAlign: 'left', marginTop: 28 }}>
 
           <div className="form-group">
-            <label className="form-label">Microsoft email</label>
+            <label className="form-label">Email</label>
             <input
               className="form-input"
               type="email"
@@ -64,12 +59,7 @@ export default function PhoneRegistration({ user, inviteCode, onComplete }) {
               readOnly
               style={{ background: 'var(--color-surface-2)', color: 'var(--color-text-muted)', cursor: 'not-allowed' }}
             />
-            <p className="form-hint" style={{ marginTop: 4 }}>{'Signed in via Microsoft — this cannot be changed'}</p>
-            {!isCorpEmail && (
-              <p style={{ color: 'var(--color-danger)', fontSize: '0.8rem', marginTop: 6 }}>
-                {'This app requires a @microsoft.com account for Teams notifications.'}
-              </p>
-            )}
+            <p className="form-hint" style={{ marginTop: 4 }}>{'Signed in email — this cannot be changed'}</p>
           </div>
 
           <div className="form-group">
@@ -115,7 +105,7 @@ export default function PhoneRegistration({ user, inviteCode, onComplete }) {
           <button
             type="submit"
             className="btn btn-primary btn-full btn-large"
-            disabled={loading || !phone.trim() || !isCorpEmail}
+            disabled={loading || !phone.trim()}
           >
             {loading ? 'Saving...' : "Let's go!"}
           </button>

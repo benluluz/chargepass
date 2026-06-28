@@ -52,9 +52,6 @@ app.http('registerMe', {
       const licensePlate = body.licensePlate ? String(body.licensePlate).toUpperCase() : null
       const inviteCode = String(body.inviteCode || '').trim()
 
-      if (!user.userEmail?.toLowerCase().endsWith('@microsoft.com')) {
-        return { status: 403, jsonBody: { error: 'Only @microsoft.com accounts can register.' } }
-      }
       if (!phone) {
         return { status: 400, jsonBody: { error: 'phoneNumber is required' } }
       }
@@ -117,9 +114,6 @@ app.http('updateMyProfile', {
       const phone = (body.phoneNumber || '').replace(/\D/g, '')
       const licensePlate = body.licensePlate ? String(body.licensePlate).toUpperCase() : null
 
-      if (!user.userEmail?.toLowerCase().endsWith('@microsoft.com')) {
-        return { status: 403, jsonBody: { error: 'Only @microsoft.com accounts can update profile.' } }
-      }
       if (!phone) {
         return { status: 400, jsonBody: { error: 'phoneNumber is required' } }
       }
@@ -343,10 +337,6 @@ app.http('toggleNotifyMe', {
       const user = cosmos.getUserFromRequest(req)
       const body = await req.json()
       const enabled = Boolean(body?.enabled)
-
-      if (!user.userEmail?.toLowerCase().endsWith('@microsoft.com')) {
-        return { status: 403, jsonBody: { error: 'Only @microsoft.com accounts can update notification preferences.' } }
-      }
 
       const { resource: existing } = await cosmos.usersContainer.item(user.userId, user.userId).read().catch(() => ({ resource: null }))
       await cosmos.usersContainer.items.upsert({
