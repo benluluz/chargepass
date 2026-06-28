@@ -231,8 +231,9 @@ app.http('getLeaderboard', {
       return { status: 500, jsonBody: { error: e.message } }
     }
   }
-}
-// GET /api/me/ current active departures (notification feed)notifications 
+})
+
+// GET /api/me/notifications — current active departures (notification feed)
 app.http('getMyNotifications', {
   methods: ['GET'],
   authLevel: 'anonymous',
@@ -256,7 +257,7 @@ app.http('getMyNotifications', {
   }
 })
 
-// GET /api/me/notifications- past notifications (completed handoffs)history 
+// GET /api/me/notifications-history — past notifications (completed handoffs)
 app.http('getNotificationsHistory', {
   methods: ['GET'],
   authLevel: 'anonymous',

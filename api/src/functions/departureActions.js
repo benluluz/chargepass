@@ -168,8 +168,9 @@ app.http('cancelDeparture', {
       return { status: 500, jsonBody: { error: e.message } }
     }
   }
-}
-// POST /api/departures/{id}/ extend ETA by specified minutes (max 2 updates)delay 
+})
+
+// POST /api/departures/{id}/delay — extend ETA by specified minutes (max 2 updates)
 app.http('delayDeparture', {
   methods: ['POST'],
   authLevel: 'anonymous',
