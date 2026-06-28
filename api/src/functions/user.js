@@ -153,14 +153,13 @@ app.http('getMe', {
       const user = cosmos.getUserFromRequest(req)
       const { resource } = await cosmos.usersContainer.item(user.userId, user.userId).read().catch(() => ({ resource: null }))
       const { resources: activeDeps } = await cosmos.departuresContainer.items.query({
-        query: 'SELECT * FROM c WHERE c.userId = @uid AND c.status IN ("available", "claimed")',
-        parameters: [{ name: '@uid', value: user.userId }]
+        query: 'SELECT * FROM c WHERE c.status IN ("available", "claimed") ORDER BY c._ts DESC'
       }).fetchAll()
       const { resources: claimed } = await cosmos.departuresContainer.items.query({
         query: 'SELECT * FROM c WHERE c.status = "claimed" AND c.claimedBy.userId = @uid OFFSET 0 LIMIT 1',
         parameters: [{ name: '@uid', value: user.userId }]
       }).fetchAll()
-      const hasActiveClaim = claimed.length > 0 || activeDeps.some(dep => dep.pings?.some(p => p.userId === user.userId))
+      const hasActiveClaim = claimed.length > 0 || activeDeps.some(dep => dep.claimedBy?.userId === user.userId || dep.pings?.some(p => p.userId === user.userId))
       return {
         jsonBody: {
           userId: user.userId,
@@ -229,6 +228,7 @@ app.http('getMyActivity', {
       const [ 
         { resource: userRecord },
         { resources: activeDeps },
+        { resources: allActiveDeps },
         { resources: claimedDeps },
         { resources: completed }
       ] = await Promise.all([
@@ -242,12 +242,15 @@ app.http('getMyActivity', {
           parameters: [{ name: '@uid', value: user.userId }]
         }).fetchAll(),
         cosmos.departuresContainer.items.query({
+          query: 'SELECT * FROM c WHERE c.status IN ("available", "claimed") ORDER BY c._ts DESC'
+        }).fetchAll(),
+        cosmos.departuresContainer.items.query({
           query: 'SELECT * FROM c WHERE c.userId = @uid AND c.status = "completed" ORDER BY c.completedAt DESC',
           parameters: [{ name: '@uid', value: user.userId }]
         }).fetchAll()
       ])
 
-      const pendingPingDeparture = activeDeps.find(dep => dep.pings?.some(p => p.userId === user.userId && !p.isEtaUpdate)) || null
+      const pendingPingDeparture = allActiveDeps.find(dep => dep.claimedBy?.userId === user.userId || dep.pings?.some(p => p.userId === user.userId && !p.isEtaUpdate)) || null
       const claimedSpot = claimedDeps[0] ?? pendingPingDeparture
 
       return {
