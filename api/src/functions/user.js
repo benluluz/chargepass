@@ -290,7 +290,7 @@ app.http('getMyNotifications', {
     try {
       await cosmos.ensureInitialized()
       const user = cosmos.getUserFromRequest(req)
-      const [available, claimedMine, claimedForMe] = await Promise.all([
+      const [available, claimedMine, claimedForMe, eventNotifications] = await Promise.all([
         cosmos.departuresContainer.items.query({
           query: 'SELECT * FROM c WHERE c.status = "available" AND c.userId != @uid ORDER BY c._ts DESC',
           parameters: [{ name: '@uid', value: user.userId }]
@@ -302,12 +302,16 @@ app.http('getMyNotifications', {
         cosmos.departuresContainer.items.query({
           query: 'SELECT * FROM c WHERE c.status = "claimed" AND c.claimedBy.userId = @uid ORDER BY c._ts DESC',
           parameters: [{ name: '@uid', value: user.userId }]
+        }).fetchAll(),
+        cosmos.departuresContainer.items.query({
+          query: 'SELECT * FROM c WHERE ARRAY_CONTAINS(c.handoffEvents, { "targetUserId": @uid }, true) ORDER BY c._ts DESC',
+          parameters: [{ name: '@uid', value: user.userId }]
         }).fetchAll()
       ])
 
       const feed = [
         ...available.resources.map(dep => ({
-          id: `available-${dep.id}`,
+          id: `available-${dep.id}-${dep.availableAt || dep.postedAt || dep._ts}`,
           kind: 'available',
           title: `New spot posted: ${dep.spotNumber}`,
           message: `${dep.userName} is leaving in ~${dep.etaMinutes} min`,
@@ -358,6 +362,34 @@ app.http('getMyNotifications', {
             timestamp: msg.createdAt || dep.claimedAt || dep.postedAt,
             spotNumber: dep.spotNumber
           })
+        }
+      }
+
+      for (const dep of eventNotifications.resources) {
+        const events = Array.isArray(dep.handoffEvents) ? dep.handoffEvents : []
+        for (const event of events) {
+          if (event?.targetUserId !== user.userId || !event?.id) continue
+          if (event.type === 'claim-released') {
+            feed.push({
+              id: `event-${dep.id}-${event.id}`,
+              kind: 'claim-release',
+              title: `Spot ${dep.spotNumber} claim released`,
+              message: `${event.actorName || 'The claimer'} released the claim. Your spot is back in the feed.`,
+              url: '/?view=my-activity',
+              timestamp: event.createdAt || dep._ts,
+              spotNumber: dep.spotNumber
+            })
+          } else if (event.type === 'claim-cancelled-by-poster') {
+            feed.push({
+              id: `event-${dep.id}-${event.id}`,
+              kind: 'claim-cancelled',
+              title: `Spot ${dep.spotNumber} claim cancelled`,
+              message: `${event.actorName || 'The poster'} cancelled your claim. The spot returned to the feed.`,
+              url: '/?view=my-activity',
+              timestamp: event.createdAt || dep._ts,
+              spotNumber: dep.spotNumber
+            })
+          }
         }
       }
 

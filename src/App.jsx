@@ -11,6 +11,28 @@ import OnboardingGuide from './components/OnboardingGuide'
 
 const IS_DEV = import.meta.env.DEV
 
+function playNotificationTone(audioContextRef) {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext
+    if (!Ctx) return
+    if (!audioContextRef.current) audioContextRef.current = new Ctx()
+    const ctx = audioContextRef.current
+    if (!ctx || ctx.state !== 'running') return
+
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(880, ctx.currentTime)
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.05, ctx.currentTime + 0.02)
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.22)
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start()
+    osc.stop(ctx.currentTime + 0.24)
+  } catch {}
+}
+
 function LoginScreen() {
   return (
     <div className="login-screen">
@@ -49,6 +71,26 @@ export default function App() {
   const removeTimersRef = useRef(new Map())
   const seenNotificationsRef = useRef(new Set())
   const lastSpotsSeenAtRef = useRef(Date.now())
+  const audioContextRef = useRef(null)
+
+  useEffect(() => {
+    const unlockAudio = () => {
+      try {
+        const Ctx = window.AudioContext || window.webkitAudioContext
+        if (!Ctx) return
+        if (!audioContextRef.current) audioContextRef.current = new Ctx()
+        if (audioContextRef.current.state !== 'running') {
+          audioContextRef.current.resume().catch(() => {})
+        }
+      } catch {}
+    }
+    window.addEventListener('pointerdown', unlockAudio, { passive: true })
+    window.addEventListener('keydown', unlockAudio)
+    return () => {
+      window.removeEventListener('pointerdown', unlockAudio)
+      window.removeEventListener('keydown', unlockAudio)
+    }
+  }, [])
 
   const loadProfile = useCallback(async () => {
     try {
@@ -143,6 +185,7 @@ export default function App() {
           message: row.message,
           url: row.url || '/?view=my-activity'
         }))
+        if (notifications.length) playNotificationTone(audioContextRef)
         if (notifications.length && location.pathname !== '/my-activity') setActivityBadge(true)
         markNotificationsSeen(notifications.map(n => n.id))
         setInAppNotifications(prev => {

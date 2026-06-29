@@ -384,17 +384,83 @@ app.http('releaseClaim', {
         return { status: 400, jsonBody: { error: 'Spot is not claimed' } }
       }
 
+      const releasedAt = new Date().toISOString()
       await cosmos.departuresContainer.item(id, id).replace({
         ...dep,
         status: 'available',
+        availableAt: releasedAt,
         claimedBy: null,
         claimedAt: null,
-        pings: []
+        pings: [],
+        delayExtensions: 0,
+        chatMessages: [],
+        handoffEvents: [
+          ...(dep.handoffEvents || []),
+          {
+            id: `evt-${id}-${Date.now()}-release`,
+            type: 'claim-released',
+            actorUserId: user.userId,
+            actorName: user.userName,
+            targetUserId: dep.userId,
+            spotNumber: dep.spotNumber,
+            createdAt: releasedAt
+          }
+        ]
       })
 
       return { jsonBody: { success: true } }
     } catch (e) {
       ctx.error('releaseClaim error:', e)
+      return { status: 500, jsonBody: { error: e.message } }
+    }
+  }
+})
+
+// POST /api/departures/{id}/cancel-claim — poster cancels current claim and re-opens spot
+app.http('cancelClaimByPoster', {
+  methods: ['POST'],
+  authLevel: 'anonymous',
+  route: 'departures/{id}/cancel-claim',
+  handler: async (req, ctx) => {
+    try {
+      await cosmos.ensureInitialized()
+      const id = req.params.id
+      const user = cosmos.getUserFromRequest(req)
+
+      const { resource: dep } = await cosmos.departuresContainer.item(id, id).read()
+      if (!dep) return { status: 404, jsonBody: { error: 'Departure not found' } }
+      if (dep.userId !== user.userId) return { status: 403, jsonBody: { error: 'Only the departure owner can cancel the claim' } }
+      if (dep.status !== 'claimed' || !dep.claimedBy?.userId) {
+        return { status: 400, jsonBody: { error: 'Departure is not currently claimed' } }
+      }
+
+      const reopenedAt = new Date().toISOString()
+      await cosmos.departuresContainer.item(id, id).replace({
+        ...dep,
+        status: 'available',
+        availableAt: reopenedAt,
+        claimedBy: null,
+        claimedAt: null,
+        pings: [],
+        delayExtensions: 0,
+        chatMessages: [],
+        handoffEvents: [
+          ...(dep.handoffEvents || []),
+          {
+            id: `evt-${id}-${Date.now()}-poster-cancel`,
+            type: 'claim-cancelled-by-poster',
+            actorUserId: user.userId,
+            actorName: user.userName,
+            targetUserId: dep.claimedBy.userId,
+            spotNumber: dep.spotNumber,
+            createdAt: reopenedAt
+          }
+        ]
+      })
+
+      return { jsonBody: { success: true } }
+    } catch (e) {
+      ctx.error('cancelClaimByPoster error:', e)
       return { status: 500, jsonBody: { error: e.message } }
     }
   }

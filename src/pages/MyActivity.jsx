@@ -92,6 +92,15 @@ export default function MyActivity({ user, onViewed }) {
     if (res) loadActivity()
   }
 
+  async function handleCancelClaimByPoster() {
+    if (!dep) return
+    if (!window.confirm('Cancel this current claim and return the spot to the feed?')) return
+    setConfirming(true)
+    const res = await post('/api/departures/' + dep.id + '/cancel-claim', {})
+    setConfirming(false)
+    if (res) loadActivity()
+  }
+
   async function sendChatMessage(depId, message, reset) {
     if (!message.trim()) return
     const res = await post('/api/departures/' + depId + '/chat', { message: message.trim() })
@@ -290,6 +299,9 @@ export default function MyActivity({ user, onViewed }) {
                   </button>
                   <button className="btn btn-secondary btn-sm" onClick={() => handleDelay(15)} disabled={delaying || delayExtensions >= 2}>
                     +15
+                  </button>
+                  <button className="btn btn-danger btn-sm" onClick={handleCancelClaimByPoster} disabled={confirming}>
+                    Cancel Claim
                   </button>
                 </div>
                 <div style={{ fontSize: '0.76rem', color: 'var(--color-text-muted)', marginBottom: 8 }}>

@@ -111,6 +111,7 @@ app.http('postDeparture', {
         totalHandoffs: existingUser?.totalHandoffs ?? 0
       })
 
+      const postedAt = new Date().toISOString()
       const departure = {
         id: crypto.randomUUID(),
         userId: user.userId,
@@ -120,9 +121,11 @@ app.http('postDeparture', {
         spotNumber: normalizeSpotNumber(body.spotNumber),
         etaMinutes: Number(body.etaMinutes),
         status: 'available',
-        postedAt: new Date().toISOString(),
+        postedAt,
+        availableAt: postedAt,
         pings: [],
         delayExtensions: 0,
+        handoffEvents: [],
         claimedBy: null,
         completedAt: null,
         creditsEarned: null
