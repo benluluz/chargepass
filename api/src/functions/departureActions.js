@@ -246,9 +246,175 @@ app.http('delayDeparture', {
         pings: newPings
       })
 
+      // Send ETA update notification to claimer if there is one
+      if (dep.claimedBy?.userId && dep.claimedBy.userId !== user.userId) {
+        const notificationId = `eta-${id}-${Date.now()}`
+        try {
+          await cosmos.departuresContainer.items.create({
+            id: notificationId,
+            userId: dep.claimedBy.userId,
+            type: 'eta-update',
+            status: 'available',
+            departureName: dep.userName,
+            departureId: id,
+            message: `${dep.userName} will be ${delayMinutes} minutes late (new ETA: ${newEta} min)`,
+            createdAt: new Date().toISOString(),
+            read: false
+          })
+        } catch (notifErr) {
+          ctx.warn('Failed to create ETA notification:', notifErr.message)
+        }
+      }
+
       return { jsonBody: { success: true, newEta, updatesRemaining: 2 - (updates.length + 1) } }
     } catch (e) {
       ctx.error('delayDeparture error:', e)
+      return { status: 500, jsonBody: { error: e.message } }
+    }
+  }
+})
+// POST /api/departures/{id}/ send an in-app messagechat 
+app.http('sendChatMessage', {
+  methods: ['POST'],
+  authLevel: 'anonymous',
+  route: 'departures/{id}/chat',
+  handler: async (req, ctx) => {
+    try {
+      await cosmos.ensureInitialized()
+      const id = req.params.id
+      const user = cosmos.getUserFromRequest(req)
+      const body = await req.json()
+      const message = body.message?.trim()
+
+      if (!message) {
+        return { status: 400, jsonBody: { error: 'Message is required' } }
+      }
+
+      const { resource: dep } = await cosmos.departuresContainer.item(id, id).read()
+      if (!dep) return { status: 404, jsonBody: { error: 'Departure not found' } }
+
+      const isOwner = dep.userId === user.userId
+      const isClaimer = dep.claimedBy?.userId === user.userId
+      if (!isOwner && !isClaimer) {
+        return { status: 403, jsonBody: { error: 'You are not part of this handoff' } }
+      }
+
+      const chatMessage = {
+        id: `msg-${id}-${Date.now()}`,
+        senderUserId: user.userId,
+        senderName: user.userName,
+        message,
+        createdAt: new Date().toISOString()
+      }
+
+      const chatMessages = [...(dep.chatMessages || []), chatMessage]
+      await cosmos.departuresContainer.item(id, id).replace({
+        ...dep,
+        chatMessages
+      })
+
+      return { jsonBody: { success: true, messageId: chatMessage.id } }
+    } catch (e) {
+      ctx.error('sendChatMessage error:', e)
+      return { status: 500, jsonBody: { error: e.message } }
+    }
+  }
+})
+
+// POST /api/departures/{id}/no- claimer marks that they didn't get the spotshow 
+app.http('noShowDeparture', {
+  methods: ['POST'],
+  authLevel: 'anonymous',
+  route: 'departures/{id}/no-show',
+  handler: async (req, ctx) => {
+    try {
+      await cosmos.ensureInitialized()
+      const id = req.params.id
+      const user = cosmos.getUserFromRequest(req)
+
+      const { resource: dep } = await cosmos.departuresContainer.item(id, id).read()
+      if (!dep) return { status: 404, jsonBody: { error: 'Departure not found' } }
+
+      const isClaimer = dep.claimedBy?.userId === user.userId
+      if (!isClaimer) {
+        return { status: 403, jsonBody: { error: 'Only the claimer can report no-show' } }
+      }
+
+      if (dep.status !== 'claimed') {
+        return { status: 400, jsonBody: { error: 'Spot must be claimed to report no-show' } }
+      }
+
+      const now = new Date()
+      const depTime = new Date(dep.createdAt)
+      depTime.setMinutes(depTime.getMinutes() + dep.etaMinutes)
+      const isPastDeadline = now > depTime
+
+      if (isPastDeadline) {
+        const repostedDep = {
+          ...dep,
+          id: `${id}-reposted-${Date.now()}`,
+          status: 'available',
+          claimedBy: null,
+          claimedAt: null,
+          pings: [],
+          chatMessages: [],
+          createdAt: new Date().toISOString(),
+          etaMinutes: 15
+        }
+        await cosmos.departuresContainer.items.create(repostedDep)
+        await cosmos.departuresContainer.item(id, id).replace({
+          ...dep,
+          status: 'no-show'
+        })
+        return { jsonBody: { success: true, reposted: true } }
+      } else {
+        await cosmos.departuresContainer.item(id, id).replace({
+          ...dep,
+          status: 'no-show'
+        })
+        return { jsonBody: { success: true, reposted: false } }
+      }
+    } catch (e) {
+      ctx.error('noShowDeparture error:', e)
+      return { status: 500, jsonBody: { error: e.message } }
+    }
+  }
+})
+
+// POST /api/departures/{id}/release- claimer releases their claimclaim 
+app.http('releaseClaim', {
+  methods: ['POST'],
+  authLevel: 'anonymous',
+  route: 'departures/{id}/release-claim',
+  handler: async (req, ctx) => {
+    try {
+      await cosmos.ensureInitialized()
+      const id = req.params.id
+      const user = cosmos.getUserFromRequest(req)
+
+      const { resource: dep } = await cosmos.departuresContainer.item(id, id).read()
+      if (!dep) return { status: 404, jsonBody: { error: 'Departure not found' } }
+
+      const isClaimer = dep.claimedBy?.userId === user.userId
+      if (!isClaimer) {
+        return { status: 403, jsonBody: { error: 'Only the claimer can release' } }
+      }
+
+      if (dep.status !== 'claimed') {
+        return { status: 400, jsonBody: { error: 'Spot is not claimed' } }
+      }
+
+      await cosmos.departuresContainer.item(id, id).replace({
+        ...dep,
+        status: 'available',
+        claimedBy: null,
+        claimedAt: null,
+        pings: []
+      })
+
+      return { jsonBody: { success: true } }
+    } catch (e) {
+      ctx.error('releaseClaim error:', e)
       return { status: 500, jsonBody: { error: e.message } }
     }
   }
