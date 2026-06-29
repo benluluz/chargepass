@@ -46,7 +46,7 @@ export default function PhoneRegistration({ user, inviteCode, onComplete }) {
         </div>
         <h1>One more step</h1>
         <p>
-          {'Confirm your details so colleagues can reach you by email, Teams, or WhatsApp for handoff coordination.'}
+          {'Confirm your details so colleagues can reach you for handoff coordination.'}
         </p>
         <form onSubmit={handleSubmit} style={{ textAlign: 'left', marginTop: 28 }}>
 
@@ -60,6 +60,9 @@ export default function PhoneRegistration({ user, inviteCode, onComplete }) {
               style={{ background: 'var(--color-surface-2)', color: 'var(--color-text-muted)', cursor: 'not-allowed' }}
             />
             <p className="form-hint" style={{ marginTop: 4 }}>{'Signed in email — this cannot be changed'}</p>
+            <p className="form-hint" style={{ marginTop: 4 }}>
+              {'Tip: Microsoft accounts enable direct Teams message links. Private emails can still use the app and WhatsApp coordination.'}
+            </p>
           </div>
 
           <div className="form-group">
