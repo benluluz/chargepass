@@ -246,26 +246,6 @@ app.http('delayDeparture', {
         pings: newPings
       })
 
-      // Send ETA update notification to claimer if there is one
-      if (dep.claimedBy?.userId && dep.claimedBy.userId !== user.userId) {
-        const notificationId = `eta-${id}-${Date.now()}`
-        try {
-          await cosmos.departuresContainer.items.create({
-            id: notificationId,
-            userId: dep.claimedBy.userId,
-            type: 'eta-update',
-            status: 'available',
-            departureName: dep.userName,
-            departureId: id,
-            message: `${dep.userName} will be ${delayMinutes} minutes late (new ETA: ${newEta} min)`,
-            createdAt: new Date().toISOString(),
-            read: false
-          })
-        } catch (notifErr) {
-          ctx.warn('Failed to create ETA notification:', notifErr.message)
-        }
-      }
-
       return { jsonBody: { success: true, newEta, updatesRemaining: 2 - (updates.length + 1) } }
     } catch (e) {
       ctx.error('delayDeparture error:', e)
