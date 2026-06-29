@@ -127,25 +127,38 @@ app.http('confirmHandoff', {
       }
 
       const confirmedBy = dep.claimedBy || { userId: user.userId, userName: user.userName, userEmail: user.userEmail }
+      const completedAt = new Date().toISOString()
 
       await cosmos.departuresContainer.item(id, id).replace({
         ...dep,
         status: 'completed',
-        completedAt: new Date().toISOString(),
+        completedAt,
         claimedBy: confirmedBy,
         creditsEarned: HANDOFF_CREDITS
       })
 
       // Award credits to the leaver
+      let creditsAwarded = 0
       try {
         const { resource: leaverRecord } = await cosmos.usersContainer.item(dep.userId, dep.userId).read()
+        const successNotification = {
+          id: `handoff-outcome-${id}-${Date.now()}-approved`,
+          type: 'claimer-approved',
+          title: `Spot ${dep.spotNumber} handoff confirmed`,
+          message: `${confirmedBy.userName || 'The claimer'} confirmed they got the spot. You received +${HANDOFF_CREDITS} credits.`,
+          timestamp: completedAt,
+          url: '/?view=my-activity'
+        }
         if (leaverRecord) {
+          creditsAwarded = HANDOFF_CREDITS
           await cosmos.usersContainer.item(dep.userId, dep.userId).replace({
             ...leaverRecord,
             credits: (leaverRecord.credits || 0) + HANDOFF_CREDITS,
-            totalHandoffs: (leaverRecord.totalHandoffs || 0) + 1
+            totalHandoffs: (leaverRecord.totalHandoffs || 0) + 1,
+            notifications: [...(leaverRecord.notifications || []), successNotification]
           })
         } else {
+          creditsAwarded = HANDOFF_CREDITS
           await cosmos.usersContainer.items.upsert({
             id: dep.userId,
             userId: dep.userId,
@@ -159,15 +172,36 @@ app.http('confirmHandoff', {
             onboardingSeen: false,
             browserPushEnabled: false,
             pushSubscriptions: [],
-            notifications: []
+            notifications: [successNotification]
           })
         }
       } catch (creditErr) {
         // Credit award failure shouldn't fail the overall confirmation
         ctx.warn('Failed to award credits:', creditErr.message)
+        try {
+          const { resource: leaverRecord } = await cosmos.usersContainer.item(dep.userId, dep.userId).read().catch(() => ({ resource: null }))
+          if (leaverRecord) {
+            await cosmos.usersContainer.item(dep.userId, dep.userId).replace({
+              ...leaverRecord,
+              notifications: [
+                ...(leaverRecord.notifications || []),
+                {
+                  id: `handoff-outcome-${id}-${Date.now()}-approved-no-credit`,
+                  type: 'claimer-approved',
+                  title: `Spot ${dep.spotNumber} handoff confirmed`,
+                  message: `${confirmedBy.userName || 'The claimer'} confirmed they got the spot, but credits were not awarded due to a temporary issue.`,
+                  timestamp: completedAt,
+                  url: '/?view=my-activity'
+                }
+              ]
+            })
+          }
+        } catch (notifyErr) {
+          ctx.warn('Failed to notify poster on credit failure:', notifyErr.message)
+        }
       }
 
-      return { jsonBody: { success: true, creditsAwarded: HANDOFF_CREDITS } }
+      return { jsonBody: { success: true, creditsAwarded } }
     } catch (e) {
       ctx.error('confirmHandoff error:', e)
       return { status: 500, jsonBody: { error: e.message } }
@@ -329,17 +363,19 @@ app.http('noShowDeparture', {
       const depTime = new Date(dep.createdAt)
       depTime.setMinutes(depTime.getMinutes() + dep.etaMinutes)
       const isPastDeadline = now > depTime
+      const noShowAt = now.toISOString()
 
       if (isPastDeadline) {
         const repostedDep = {
           ...dep,
           id: `${id}-reposted-${Date.now()}`,
           status: 'available',
+          availableAt: noShowAt,
           claimedBy: null,
           claimedAt: null,
           pings: [],
           chatMessages: [],
-          createdAt: new Date().toISOString(),
+          createdAt: noShowAt,
           etaMinutes: 15
         }
         await cosmos.departuresContainer.items.create(repostedDep)
@@ -347,12 +383,46 @@ app.http('noShowDeparture', {
           ...dep,
           status: 'no-show'
         })
+        const { resource: posterRecord } = await cosmos.usersContainer.item(dep.userId, dep.userId).read().catch(() => ({ resource: null }))
+        if (posterRecord) {
+          await cosmos.usersContainer.item(dep.userId, dep.userId).replace({
+            ...posterRecord,
+            notifications: [
+              ...(posterRecord.notifications || []),
+              {
+                id: `handoff-outcome-${id}-${Date.now()}-no-show`,
+                type: 'claimer-disapproved',
+                title: `Spot ${dep.spotNumber} not received`,
+                message: `${dep.claimedBy?.userName || 'The claimer'} reported they did not get the spot. You did not receive credits.`,
+                timestamp: noShowAt,
+                url: '/?view=my-activity'
+              }
+            ]
+          })
+        }
         return { jsonBody: { success: true, reposted: true } }
       } else {
         await cosmos.departuresContainer.item(id, id).replace({
           ...dep,
           status: 'no-show'
         })
+        const { resource: posterRecord } = await cosmos.usersContainer.item(dep.userId, dep.userId).read().catch(() => ({ resource: null }))
+        if (posterRecord) {
+          await cosmos.usersContainer.item(dep.userId, dep.userId).replace({
+            ...posterRecord,
+            notifications: [
+              ...(posterRecord.notifications || []),
+              {
+                id: `handoff-outcome-${id}-${Date.now()}-no-show`,
+                type: 'claimer-disapproved',
+                title: `Spot ${dep.spotNumber} not received`,
+                message: `${dep.claimedBy?.userName || 'The claimer'} reported they did not get the spot. You did not receive credits.`,
+                timestamp: noShowAt,
+                url: '/?view=my-activity'
+              }
+            ]
+          })
+        }
         return { jsonBody: { success: true, reposted: false } }
       }
     } catch (e) {
