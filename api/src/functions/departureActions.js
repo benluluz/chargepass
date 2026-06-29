@@ -205,57 +205,16 @@ app.http('delayDeparture', {
   route: 'departures/{id}/delay',
   handler: async (req, ctx) => {
     try {
-      await cosmos.ensureInitialized()
-      const id = req.params.id
-      const user = cosmos.getUserFromRequest(req)
+      // Test: just echo back what we received
       const body = await req.json()
-      const delayMinutes = Number(body.delayMinutes ?? body.addMinutes ?? body.addMinutes)
-
-      ctx.log('delay body:', JSON.stringify(body), 'delayMinutes:', delayMinutes, 'isFinite:', Number.isFinite(delayMinutes))
-
-      if (!Number.isFinite(delayMinutes) || delayMinutes <= 0) {
-        return { status: 400, jsonBody: { error: `delayMinutes (number) is required - got body: ${JSON.stringify(body)}, delayMinutes: ${delayMinutes}` } }
-      }
-
-      const { resource: dep } = await cosmos.departuresContainer.item(id, id).read()
-      if (!dep) return { status: 404, jsonBody: { error: 'Departure not found' } }
-      if (dep.userId !== user.userId) return { status: 403, jsonBody: { error: 'Only the departure owner can delay' } }
-      if (dep.status !== 'available' && dep.status !== 'claimed') {
-        return { status: 400, jsonBody: { error: 'Departure is not active' } }
-      }
-
-      // Track number of updates via pings array (reuse for ETA tracking)
-      const updates = dep.pings?.filter(p => p.isEtaUpdate) || []
-      if (updates.length >= 2) {
-        return { status: 400, jsonBody: { error: 'Maximum ETA updates (2) reached' } }
-      }
-
-      // Update ETA
-      const newEta = dep.etaMinutes + delayMinutes
-      const newPings = [
-        ...(dep.pings || []),
-        {
-          isEtaUpdate: true,
-          delayMinutes,
-          newEta: newEta,
-          updatedAt: new Date().toISOString()
-        }
-      ]
-
-      await cosmos.departuresContainer.item(id, id).replace({
-        ...dep,
-        etaMinutes: newEta,
-        pings: newPings
-      })
-
-      return { jsonBody: { success: true, newEta, updatesRemaining: 2 - (updates.length + 1) } }
+      ctx.log('delay body:', JSON.stringify(body))
+      return { jsonBody: { success: true, debug: 'delay endpoint received', body } }
     } catch (e) {
       ctx.error('delayDeparture error:', e)
       return { status: 500, jsonBody: { error: e.message } }
     }
   }
 })
-// POST /api/departures/{id}/ send an in-app messagechat 
 app.http('sendChatMessage', {
   methods: ['POST'],
   authLevel: 'anonymous',
