@@ -122,6 +122,7 @@ app.http('postDeparture', {
         status: 'available',
         postedAt: new Date().toISOString(),
         pings: [],
+        delayExtensions: 0,
         claimedBy: null,
         completedAt: null,
         creditsEarned: null

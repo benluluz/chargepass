@@ -290,7 +290,7 @@ app.http('getMyNotifications', {
     try {
       await cosmos.ensureInitialized()
       const user = cosmos.getUserFromRequest(req)
-      const [available, claimedMine] = await Promise.all([
+      const [available, claimedMine, claimedForMe] = await Promise.all([
         cosmos.departuresContainer.items.query({
           query: 'SELECT * FROM c WHERE c.status = "available" AND c.userId != @uid ORDER BY c._ts DESC',
           parameters: [{ name: '@uid', value: user.userId }]
@@ -298,30 +298,73 @@ app.http('getMyNotifications', {
         cosmos.departuresContainer.items.query({
           query: 'SELECT * FROM c WHERE c.status = "claimed" AND c.userId = @uid ORDER BY c._ts DESC',
           parameters: [{ name: '@uid', value: user.userId }]
+        }).fetchAll(),
+        cosmos.departuresContainer.items.query({
+          query: 'SELECT * FROM c WHERE c.status = "claimed" AND c.claimedBy.userId = @uid ORDER BY c._ts DESC',
+          parameters: [{ name: '@uid', value: user.userId }]
         }).fetchAll()
       ])
 
+      const feed = [
+        ...available.resources.map(dep => ({
+          id: `available-${dep.id}`,
+          kind: 'available',
+          title: `New spot posted: ${dep.spotNumber}`,
+          message: `${dep.userName} is leaving in ~${dep.etaMinutes} min`,
+          url: '/?view=my-activity',
+          timestamp: dep.postedAt,
+          spotNumber: dep.spotNumber
+        })),
+        ...claimedMine.resources.map(dep => ({
+          id: `claimed-${dep.id}`,
+          kind: 'claimed',
+          title: `Spot ${dep.spotNumber} is claimed`,
+          message: `${dep.claimedBy?.userName || 'Someone'} is on the way`,
+          url: '/?view=my-activity',
+          timestamp: dep.claimedAt || dep.postedAt,
+          spotNumber: dep.spotNumber
+        }))
+      ]
+
+      const handoffs = [...claimedMine.resources, ...claimedForMe.resources]
+      for (const dep of handoffs) {
+        const isClaimer = dep.claimedBy?.userId === user.userId
+        const delayUpdates = (dep.pings || []).filter(p => p.isEtaUpdate)
+        if (isClaimer) {
+          for (const upd of delayUpdates) {
+            feed.push({
+              id: `delay-${dep.id}-${upd.updatedAt || upd.newEta || upd.delayMinutes}`,
+              kind: 'delay',
+              title: `Spot ${dep.spotNumber} ETA updated`,
+              message: `${dep.userName} is running late by +${upd.delayMinutes} min (new ETA ~${upd.newEta || dep.etaMinutes} min)`,
+              url: '/?view=my-activity',
+              timestamp: upd.updatedAt || dep.claimedAt || dep.postedAt,
+              spotNumber: dep.spotNumber
+            })
+          }
+        }
+
+        const chatMessages = Array.isArray(dep.chatMessages) ? dep.chatMessages : []
+        for (const msg of chatMessages) {
+          if (!msg?.id || msg.senderUserId === user.userId || msg.senderUserId === 'system') continue
+          const preview = String(msg.message || '').trim().slice(0, 120)
+          if (!preview) continue
+          feed.push({
+            id: `chat-${dep.id}-${msg.id}`,
+            kind: 'chat',
+            title: `New message on spot ${dep.spotNumber}`,
+            message: `${msg.senderName || 'Driver'}: ${preview}`,
+            url: '/?view=my-activity',
+            timestamp: msg.createdAt || dep.claimedAt || dep.postedAt,
+            spotNumber: dep.spotNumber
+          })
+        }
+      }
+
+      feed.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
+
       return {
-        jsonBody: [
-          ...available.resources.map(dep => ({
-            id: `available-${dep.id}`,
-            kind: 'available',
-            title: `New spot posted: ${dep.spotNumber}`,
-            message: `${dep.userName} is leaving in ~${dep.etaMinutes} min`,
-            url: '/?view=my-activity',
-            timestamp: dep.postedAt,
-            spotNumber: dep.spotNumber
-          })),
-          ...claimedMine.resources.map(dep => ({
-            id: `claimed-${dep.id}`,
-            kind: 'claimed',
-            title: `Spot ${dep.spotNumber} is claimed`,
-            message: `${dep.claimedBy?.userName || 'Someone'} is on the way`,
-            url: '/?view=my-activity',
-            timestamp: dep.claimedAt || dep.postedAt,
-            spotNumber: dep.spotNumber
-          }))
-        ]
+        jsonBody: feed
       }
     } catch (e) {
       ctx.error('getMyNotifications error:', e)

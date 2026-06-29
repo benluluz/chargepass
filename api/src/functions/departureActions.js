@@ -243,7 +243,8 @@ app.http('delayDeparture', {
       await cosmos.departuresContainer.item(id, id).replace({
         ...dep,
         etaMinutes: newEta,
-        pings: newPings
+        pings: newPings,
+        delayExtensions: updates.length + 1
       })
 
       return { jsonBody: { success: true, newEta, updatesRemaining: 2 - (updates.length + 1) } }

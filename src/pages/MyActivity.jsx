@@ -64,14 +64,6 @@ export default function MyActivity({ user, onViewed }) {
     if (res) loadActivity()
   }
 
-  async function handleAcceptPing(pingerId) {
-    if (!dep) return
-    setConfirming(true)
-    const res = await post('/api/departures/' + dep.id + '/accept-ping', { userId: pingerId })
-    setConfirming(false)
-    if (res) loadActivity()
-  }
-
   async function handleNoShow() {
     if (!window.confirm("Confirm you did not get this spot? The poster won't receive credit points.")) return
     setConfirming(true)
@@ -175,7 +167,7 @@ export default function MyActivity({ user, onViewed }) {
   const isPastDeadline = claimed && new Date(claimed.confirmedDeadline) < new Date()
   const claimedFloor = claimed ? getSpotFloor(claimed.spotNumber) : null
   const depFloor = dep ? getSpotFloor(dep.spotNumber) : null
-  const pendingClaim = claimed && (!claimed.claimedBy || claimed.status !== 'claimed')
+  const delayExtensions = dep?.delayExtensions ?? (dep?.pings || []).filter(p => p.isEtaUpdate).length
 
   return (
     <div>
@@ -209,19 +201,13 @@ export default function MyActivity({ user, onViewed }) {
                   <span className="spot-badge" style={{ background: `${FLOOR_COLORS[claimedFloor]}20`, color: FLOOR_COLORS[claimedFloor] }}>{`Floor ${claimedFloor}`}</span>
                 )}
               </div>
-              <span style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>posted by {claimed.userName}</span>
+              <span style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>~{claimed.etaMinutes} min ETA</span>
             </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: 12 }}>
+              posted by <strong>{claimed.userName}</strong>
+            </p>
 
-            {pendingClaim ? (
-              <div style={{ background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 'var(--radius-sm)', padding: '10px 12px', marginBottom: 12 }}>
-                <p style={{ fontWeight: 700, color: '#1d4ed8', marginBottom: 4 }}>
-                  Claim sent — waiting for the poster to accept.
-                </p>
-                <p style={{ fontSize: '0.85rem', color: '#1e3a8a' }}>
-                  You can still chat now, and the poster will see your pending claim in My Activity.
-                </p>
-              </div>
-            ) : isPastDeadline ? (
+            {isPastDeadline ? (
               <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 'var(--radius-sm)', padding: '10px 12px', marginBottom: 12 }}>
                 <p style={{ fontWeight: 700, color: '#991b1b', marginBottom: 4 }}>
                   20 minutes have passed since the departure time!
@@ -237,13 +223,13 @@ export default function MyActivity({ user, onViewed }) {
             )}
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                <button className="btn btn-primary btn-sm" onClick={handleConfirm} disabled={confirming || pendingClaim}>
+                <button className="btn btn-primary btn-sm" onClick={handleConfirm} disabled={confirming}>
                   {confirming ? '...' : 'Got the Spot!'}
                 </button>
-                <button className="btn btn-secondary btn-sm" onClick={handleNoShow} disabled={confirming || pendingClaim}>
+                <button className="btn btn-secondary btn-sm" onClick={handleNoShow} disabled={confirming}>
                   Did Not Get It
                 </button>
-                <button className="btn btn-danger btn-sm" onClick={handleReleaseClaim} disabled={confirming || pendingClaim}>
+                <button className="btn btn-danger btn-sm" onClick={handleReleaseClaim} disabled={confirming}>
                   Release Claim
                 </button>
               </div>
@@ -296,20 +282,20 @@ export default function MyActivity({ user, onViewed }) {
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-                  <button className="btn btn-secondary btn-sm" onClick={() => handleDelay(5)} disabled={delaying || (dep.delayExtensions || 0) >= 2}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleDelay(5)} disabled={delaying || delayExtensions >= 2}>
                     {delaying ? '...' : 'Running late +5'}
                   </button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => handleDelay(10)} disabled={delaying || (dep.delayExtensions || 0) >= 2}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleDelay(10)} disabled={delaying || delayExtensions >= 2}>
                     +10
                   </button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => handleDelay(15)} disabled={delaying || (dep.delayExtensions || 0) >= 2}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleDelay(15)} disabled={delaying || delayExtensions >= 2}>
                     +15
                   </button>
                 </div>
                 <div style={{ fontSize: '0.76rem', color: 'var(--color-text-muted)', marginBottom: 8 }}>
-                  {(dep.delayExtensions || 0) >= 2
+                  {delayExtensions >= 2
                     ? 'Maximum ETA extensions reached for this post.'
-                    : `ETA updates left: ${2 - (dep.delayExtensions || 0)} · Claimer gets notified without credit charge.`}
+                    : `ETA updates left: ${2 - delayExtensions} · Claimer gets notified without credit charge.`}
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {dep.claimedBy?.userPhone && (
@@ -345,20 +331,20 @@ export default function MyActivity({ user, onViewed }) {
                   Waiting for someone to claim your spot. Share ChargePass with your team!
                 </p>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button className="btn btn-secondary btn-sm" onClick={() => handleDelay(5)} disabled={delaying || (dep.delayExtensions || 0) >= 2}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleDelay(5)} disabled={delaying || delayExtensions >= 2}>
                     {delaying ? '...' : 'Running late +5'}
                   </button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => handleDelay(10)} disabled={delaying || (dep.delayExtensions || 0) >= 2}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleDelay(10)} disabled={delaying || delayExtensions >= 2}>
                     +10
                   </button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => handleDelay(15)} disabled={delaying || (dep.delayExtensions || 0) >= 2}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleDelay(15)} disabled={delaying || delayExtensions >= 2}>
                     +15
                   </button>
                 </div>
                 <div style={{ fontSize: '0.76rem', color: 'var(--color-text-muted)', marginTop: 8 }}>
-                  {(dep.delayExtensions || 0) >= 2
+                  {delayExtensions >= 2
                     ? 'Maximum ETA extensions reached for this post.'
-                    : `ETA updates left: ${2 - (dep.delayExtensions || 0)} · Watchers are notified with no credit charge.`}
+                    : `ETA updates left: ${2 - delayExtensions} · Watchers are notified with no credit charge.`}
                 </div>
               </>
             )}
