@@ -209,10 +209,12 @@ app.http('delayDeparture', {
       const id = req.params.id
       const user = cosmos.getUserFromRequest(req)
       const body = await req.json()
-      const delayMinutes = Number(body.delayMinutes ?? body.addMinutes)
+      const delayMinutes = Number(body.delayMinutes ?? body.addMinutes ?? body.addMinutes)
+
+      ctx.log('delay body:', JSON.stringify(body), 'delayMinutes:', delayMinutes, 'isFinite:', Number.isFinite(delayMinutes))
 
       if (!Number.isFinite(delayMinutes) || delayMinutes <= 0) {
-        return { status: 400, jsonBody: { error: 'delayMinutes (number) is required' } }
+        return { status: 400, jsonBody: { error: `delayMinutes (number) is required - got body: ${JSON.stringify(body)}, delayMinutes: ${delayMinutes}` } }
       }
 
       const { resource: dep } = await cosmos.departuresContainer.item(id, id).read()
