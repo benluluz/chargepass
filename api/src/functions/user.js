@@ -2,6 +2,11 @@
 const { app } = require('@azure/functions')
 const cosmos = require('../lib/cosmos')
 
+function isMicrosoftAccount(email) {
+  const value = String(email || '').toLowerCase()
+  return value.endsWith('@microsoft.com') || value.endsWith('@techsupport.microsoft.com')
+}
+
 function buildInviteLink(req, userId) {
   if (!userId) return null
   const originHeader = req.headers.get('origin')
@@ -47,6 +52,9 @@ app.http('registerMe', {
     try {
       await cosmos.ensureInitialized()
       const user = cosmos.getUserFromRequest(req)
+      if (!isMicrosoftAccount(user.userEmail)) {
+        return { status: 403, jsonBody: { error: 'Only Microsoft accounts are supported.' } }
+      }
       const body = await req.json()
       const phone = (body.phoneNumber || '').replace(/\D/g, '')
       const licensePlate = body.licensePlate ? String(body.licensePlate).toUpperCase() : null
@@ -137,6 +145,9 @@ app.http('updateMyProfile', {
     try {
       await cosmos.ensureInitialized()
       const user = cosmos.getUserFromRequest(req)
+      if (!isMicrosoftAccount(user.userEmail)) {
+        return { status: 403, jsonBody: { error: 'Only Microsoft accounts are supported.' } }
+      }
       const body = await req.json()
       const phone = (body.phoneNumber || '').replace(/\D/g, '')
       const licensePlate = body.licensePlate ? String(body.licensePlate).toUpperCase() : null
@@ -179,6 +190,9 @@ app.http('getMe', {
     try {
       await cosmos.ensureInitialized()
       const user = cosmos.getUserFromRequest(req)
+      if (!isMicrosoftAccount(user.userEmail)) {
+        return { status: 403, jsonBody: { error: 'Only Microsoft accounts are supported.' } }
+      }
       const { resource } = await cosmos.usersContainer.item(user.userId, user.userId).read().catch(() => ({ resource: null }))
       const { resources: activeDeps } = await cosmos.departuresContainer.items.query({
         query: 'SELECT * FROM c WHERE c.status IN ("available", "claimed") ORDER BY c._ts DESC'
@@ -220,6 +234,9 @@ app.http('markOnboardingSeen', {
     try {
       await cosmos.ensureInitialized()
       const user = cosmos.getUserFromRequest(req)
+      if (!isMicrosoftAccount(user.userEmail)) {
+        return { status: 403, jsonBody: { error: 'Only Microsoft accounts are supported.' } }
+      }
       const { resource: existing } = await cosmos.usersContainer.item(user.userId, user.userId).read().catch(() => ({ resource: null }))
       await cosmos.usersContainer.items.upsert({
         id: user.userId,
@@ -253,6 +270,9 @@ app.http('getMyActivity', {
     try {
       await cosmos.ensureInitialized()
       const user = cosmos.getUserFromRequest(req)
+      if (!isMicrosoftAccount(user.userEmail)) {
+        return { status: 403, jsonBody: { error: 'Only Microsoft accounts are supported.' } }
+      }
 
       const [
         { resource: userRecord },
@@ -319,6 +339,9 @@ app.http('getMyNotifications', {
     try {
       await cosmos.ensureInitialized()
       const user = cosmos.getUserFromRequest(req)
+      if (!isMicrosoftAccount(user.userEmail)) {
+        return { status: 403, jsonBody: { error: 'Only Microsoft accounts are supported.' } }
+      }
       const [userRecord, available, claimedMine, claimedForMe, eventNotifications] = await Promise.all([
         cosmos.usersContainer.item(user.userId, user.userId).read().catch(() => ({ resource: null })),
         cosmos.departuresContainer.items.query({
@@ -457,6 +480,9 @@ app.http('getNotificationsHistory', {
     try {
       await cosmos.ensureInitialized()
       const user = cosmos.getUserFromRequest(req)
+      if (!isMicrosoftAccount(user.userEmail)) {
+        return { status: 403, jsonBody: { error: 'Only Microsoft accounts are supported.' } }
+      }
       
       // Get completed handoffs from other users (notification history)
       const { resources } = await cosmos.departuresContainer.items.query({
@@ -481,6 +507,9 @@ app.http('toggleNotifyMe', {
     try {
       await cosmos.ensureInitialized()
       const user = cosmos.getUserFromRequest(req)
+      if (!isMicrosoftAccount(user.userEmail)) {
+        return { status: 403, jsonBody: { error: 'Only Microsoft accounts are supported.' } }
+      }
       const body = await req.json()
       const enabled = Boolean(body?.enabled)
 
