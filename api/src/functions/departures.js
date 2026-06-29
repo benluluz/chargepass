@@ -107,6 +107,7 @@ app.http('postDeparture', {
         onboardingSeen: existingUser?.onboardingSeen ?? false,
         browserPushEnabled: existingUser?.browserPushEnabled ?? false,
         pushSubscriptions: existingUser?.pushSubscriptions ?? [],
+        notifications: existingUser?.notifications ?? [],
         credits: existingUser?.credits ?? 0,
         totalHandoffs: existingUser?.totalHandoffs ?? 0
       })

@@ -57,24 +57,32 @@ app.http('registerMe', {
       }
 
       const { resource: existing } = await cosmos.usersContainer.item(user.userId, user.userId).read().catch(() => ({ resource: null }))
-      await cosmos.usersContainer.items.upsert({
-        id: user.userId,
-        userId: user.userId,
-        userName: user.userName,
-        userEmail: user.userEmail,
-        phoneNumber: phone,
-        licensePlate,
-        credits: existing?.credits ?? 0,
-        totalHandoffs: existing?.totalHandoffs ?? 0,
-        notifyMe: existing?.notifyMe ?? false,
-        onboardingSeen: existing?.onboardingSeen ?? false,
-        browserPushEnabled: existing?.browserPushEnabled ?? false,
-        pushSubscriptions: existing?.pushSubscriptions ?? []
-      })
+      let inviteeNotifications = [...(existing?.notifications || [])]
 
       if (inviteCode && inviteCode !== user.userId) {
         const { resource: inviter } = await cosmos.usersContainer.item(inviteCode, inviteCode).read().catch(() => ({ resource: null }))
         if (inviter) {
+          const awardedAt = new Date().toISOString()
+          const inviteeName = user.userName || user.userEmail || 'A teammate'
+          const inviterName = inviter.userName || inviter.userEmail || 'Your inviter'
+          const baseId = `${inviter.userId}-${user.userId}-${Date.now()}`
+          const inviterNotification = {
+            id: `invite-awarded-${baseId}`,
+            type: 'invite-awarded',
+            title: 'Invite accepted successfully',
+            message: `${inviteeName} registered with your invite link. You received +3 credits.`,
+            timestamp: awardedAt,
+            url: '/?view=my-activity'
+          }
+          const inviteeNotification = {
+            id: `invitee-confirm-${baseId}`,
+            type: 'invitee-confirm',
+            title: 'Invite registration completed',
+            message: `${inviterName} received +3 credits because you registered with their invite link.`,
+            timestamp: awardedAt,
+            url: '/?view=my-activity'
+          }
+
           await cosmos.usersContainer.items.upsert({
             id: inviter.userId,
             userId: inviter.userId,
@@ -87,12 +95,31 @@ app.http('registerMe', {
             notifyMe: inviter.notifyMe ?? false,
             onboardingSeen: inviter.onboardingSeen ?? false,
             browserPushEnabled: inviter.browserPushEnabled ?? false,
-            pushSubscriptions: inviter.pushSubscriptions ?? []
+            pushSubscriptions: inviter.pushSubscriptions ?? [],
+            notifications: [...(inviter.notifications || []), inviterNotification]
           })
+
+          inviteeNotifications = [...inviteeNotifications, inviteeNotification]
         } else {
           ctx.warn('registerMe inviteCode not found:', inviteCode)
         }
       }
+
+      await cosmos.usersContainer.items.upsert({
+        id: user.userId,
+        userId: user.userId,
+        userName: user.userName,
+        userEmail: user.userEmail,
+        phoneNumber: phone,
+        licensePlate,
+        credits: existing?.credits ?? 0,
+        totalHandoffs: existing?.totalHandoffs ?? 0,
+        notifyMe: existing?.notifyMe ?? false,
+        onboardingSeen: existing?.onboardingSeen ?? false,
+        browserPushEnabled: existing?.browserPushEnabled ?? false,
+        pushSubscriptions: existing?.pushSubscriptions ?? [],
+        notifications: inviteeNotifications
+      })
       return { jsonBody: { success: true } }
     } catch (e) {
       ctx.error('registerMe error:', e)
@@ -131,7 +158,8 @@ app.http('updateMyProfile', {
         notifyMe: existing?.notifyMe ?? false,
         onboardingSeen: existing?.onboardingSeen ?? false,
         browserPushEnabled: existing?.browserPushEnabled ?? false,
-        pushSubscriptions: existing?.pushSubscriptions ?? []
+        pushSubscriptions: existing?.pushSubscriptions ?? [],
+        notifications: existing?.notifications ?? []
       })
 
       return { jsonBody: { success: true } }
@@ -205,7 +233,8 @@ app.http('markOnboardingSeen', {
         notifyMe: existing?.notifyMe ?? false,
         onboardingSeen: true,
         browserPushEnabled: existing?.browserPushEnabled ?? false,
-        pushSubscriptions: existing?.pushSubscriptions ?? []
+        pushSubscriptions: existing?.pushSubscriptions ?? [],
+        notifications: existing?.notifications ?? []
       })
       return { jsonBody: { success: true } }
     } catch (e) {
@@ -290,7 +319,8 @@ app.http('getMyNotifications', {
     try {
       await cosmos.ensureInitialized()
       const user = cosmos.getUserFromRequest(req)
-      const [available, claimedMine, claimedForMe, eventNotifications] = await Promise.all([
+      const [userRecord, available, claimedMine, claimedForMe, eventNotifications] = await Promise.all([
+        cosmos.usersContainer.item(user.userId, user.userId).read().catch(() => ({ resource: null })),
         cosmos.departuresContainer.items.query({
           query: 'SELECT * FROM c WHERE c.status = "available" AND c.userId != @uid ORDER BY c._ts DESC',
           parameters: [{ name: '@uid', value: user.userId }]
@@ -329,6 +359,19 @@ app.http('getMyNotifications', {
           spotNumber: dep.spotNumber
         }))
       ]
+
+      const personalNotifications = Array.isArray(userRecord.resource?.notifications) ? userRecord.resource.notifications : []
+      for (const item of personalNotifications) {
+        if (!item?.id) continue
+        feed.push({
+          id: item.id,
+          kind: item.type || 'system',
+          title: item.title || 'Notification',
+          message: item.message || '',
+          url: item.url || '/?view=my-activity',
+          timestamp: item.timestamp
+        })
+      }
 
       const handoffs = [...claimedMine.resources, ...claimedForMe.resources]
       for (const dep of handoffs) {
@@ -454,7 +497,8 @@ app.http('toggleNotifyMe', {
         notifyMe: enabled,
         onboardingSeen: existing?.onboardingSeen ?? false,
         browserPushEnabled: existing?.browserPushEnabled ?? false,
-        pushSubscriptions: existing?.pushSubscriptions ?? []
+        pushSubscriptions: existing?.pushSubscriptions ?? [],
+        notifications: existing?.notifications ?? []
       })
 
       return { jsonBody: { success: true, notifyMe: enabled } }

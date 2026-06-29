@@ -72,7 +72,8 @@ app.http('savePushSubscription', {
         notifyMe: existing?.notifyMe ?? false,
         onboardingSeen: existing?.onboardingSeen ?? false,
         browserPushEnabled: true,
-        pushSubscriptions: nextSubscriptions
+        pushSubscriptions: nextSubscriptions,
+        notifications: existing?.notifications ?? []
       })
 
       return { jsonBody: { success: true, browserPushEnabled: true } }

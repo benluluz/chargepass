@@ -158,7 +158,8 @@ app.http('confirmHandoff', {
             notifyMe: false,
             onboardingSeen: false,
             browserPushEnabled: false,
-            pushSubscriptions: []
+            pushSubscriptions: [],
+            notifications: []
           })
         }
       } catch (creditErr) {
